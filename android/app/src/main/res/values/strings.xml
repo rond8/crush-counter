@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Crush Counter</string>
+    <string name="title_activity_main">Crush Counter</string>
+    <string name="package_name">com.rdosio.crushcounter</string>
+    <string name="custom_url_scheme">com.rdosio.crushcounter</string>
+</resources>
