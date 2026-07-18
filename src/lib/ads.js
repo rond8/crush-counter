@@ -22,8 +22,17 @@ const TEST_REWARDED_ID = 'ca-app-pub-3940256099942544/5224354917'
 const LAUNCH_AD_UNIT_ID = TEST_INTERSTITIAL_ID
 const REWARDED_AD_UNIT_ID = TEST_REWARDED_ID
 
+// Minimum time between launch-ad shows. Launch ads are only ever
+// triggered from an explicit login action now (see
+// AuthContext.signIn) — never from app foreground/visibility events,
+// which felt spammy. This cooldown is just a cheap safety net against
+// accidental double-fires (e.g. a fast double-submit of the login
+// form).
+const LAUNCH_AD_COOLDOWN_MS = 3 * 60 * 1000
+
 let initialized = false
 let launchAdReady = false
+let lastShownAt = 0
 
 /**
  * Initialize the AdMob SDK. Safe to call multiple times — no-ops
@@ -51,15 +60,19 @@ async function preloadLaunchAd() {
 }
 
 /**
- * Show the launch ad if one is ready. Call this when the app launches
- * or returns to the foreground (skip calling this for Premium users).
- * Silently does nothing on web, before init, or if no ad is loaded.
+ * Show the launch ad if one is ready. Call this only from explicit
+ * user actions (e.g. a successful login) — never from app
+ * foreground/visibility events. Silently does nothing on web, before
+ * init, without a loaded ad, or within the cooldown window.
  */
 export async function maybeShowLaunchAd() {
   if (!Capacitor.isNativePlatform() || !initialized || !launchAdReady) return
+  if (Date.now() - lastShownAt < LAUNCH_AD_COOLDOWN_MS) return
+
   launchAdReady = false
   try {
     await AdMob.showInterstitial()
+    lastShownAt = Date.now()
   } catch {
     // Ignore — not worth surfacing an error to the user for this.
   } finally {

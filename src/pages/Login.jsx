@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import FacebookButton from '../components/FacebookButton'
 
 export default function Login() {
   const { signIn } = useAuth()
@@ -68,6 +69,14 @@ export default function Login() {
             {submitting ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
+
+        <div className="flex items-center gap-3 my-6 text-xs text-muted">
+          <span className="flex-1 h-px bg-midnight-border" />
+          or
+          <span className="flex-1 h-px bg-midnight-border" />
+        </div>
+
+        <FacebookButton />
 
         <p className="text-center text-sm text-muted mt-6">
           New here?{' '}

@@ -15,6 +15,7 @@
     "@capacitor/android": "^8.4.1",
     "@capacitor/core": "^8.4.1",
     "@capacitor/splash-screen": "^8.0.1",
+    "@revenuecat/purchases-capacitor": "^10.0.0",
     "@supabase/supabase-js": "^2.45.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

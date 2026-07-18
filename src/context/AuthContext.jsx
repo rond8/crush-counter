@@ -4,6 +4,8 @@ import { touchLastSeen } from '../lib/presence'
 import { claimDailyCoins } from '../lib/game'
 import { checkNewAdmirers } from '../lib/crush'
 import { getUnreadNotificationCount } from '../lib/notifications'
+import { maybeShowLaunchAd } from '../lib/ads'
+import { initPurchases } from '../lib/purchases'
 
 const HEARTBEAT_INTERVAL_MS = 45 * 1000
 const ADMIRER_POLL_INTERVAL_MS = 60 * 1000
@@ -37,11 +39,13 @@ export function AuthProvider({ children }) {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       loadProfile(session?.user?.id).finally(() => setLoading(false))
+      if (session?.user?.id) initPurchases(session.user.id)
     })
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
       loadProfile(session?.user?.id)
+      if (session?.user?.id) initPurchases(session.user.id)
     })
 
     return () => listener.subscription.unsubscribe()
@@ -136,6 +140,23 @@ export function AuthProvider({ children }) {
   const signIn = async ({ email, password }) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
+
+    // Show the launch ad only on an explicit login action — not on
+    // page refresh (restored session) and not on every foreground
+    // return. Skip it for premium users. Query fresh here rather than
+    // relying on `profile` state, since that hasn't updated yet at
+    // this point in the login flow.
+    const userId = data.user?.id
+    if (userId) {
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('fame, premium_unlocked')
+        .eq('id', userId)
+        .maybeSingle()
+      const isPremium = (prof?.fame ?? 0) >= 500 || Boolean(prof?.premium_unlocked)
+      if (!isPremium) maybeShowLaunchAd()
+    }
+
     return data
   }
 

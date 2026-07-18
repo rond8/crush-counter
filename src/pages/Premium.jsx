@@ -1,30 +1,70 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { Capacitor } from '@capacitor/core'
 import { useAuth } from '../context/AuthContext'
-import { unlockPremium } from '../lib/profile'
+import { getPremiumPackage, purchasePremium, restorePurchases, syncPremiumToProfile } from '../lib/purchases'
 
 const FAME_THRESHOLD = 500
-const UNLOCK_COST = 50
 
 export default function Premium() {
   const { profile, refreshProfile } = useAuth()
-  const [unlocking, setUnlocking] = useState(false)
+
+  const [pkg, setPkg] = useState(null)
+  const [loadingPkg, setLoadingPkg] = useState(true)
+  const [purchasing, setPurchasing] = useState(false)
+  const [restoring, setRestoring] = useState(false)
   const [error, setError] = useState('')
 
   const fame = profile?.fame ?? 0
   const hasPremium = fame >= FAME_THRESHOLD || Boolean(profile?.premium_unlocked)
   const progressPct = Math.min(100, Math.round((fame / FAME_THRESHOLD) * 100))
-  const canAfford = (profile?.coins ?? 0) >= UNLOCK_COST
+  const isNative = Capacitor.isNativePlatform()
 
-  const handleUnlock = async () => {
+  useEffect(() => {
+    if (hasPremium) {
+      setLoadingPkg(false)
+      return
+    }
+    getPremiumPackage()
+      .then(setPkg)
+      .finally(() => setLoadingPkg(false))
+  }, [hasPremium])
+
+  const handlePurchase = async () => {
+    if (!pkg) return
     setError('')
-    setUnlocking(true)
+    setPurchasing(true)
     try {
-      await unlockPremium()
-      await refreshProfile()
+      const entitled = await purchasePremium(pkg)
+      if (entitled) {
+        await syncPremiumToProfile()
+        await refreshProfile()
+      }
     } catch (err) {
-      setError(err.message || 'Could not unlock premium.')
+      // A cancelled purchase sheet isn't a real error — don't scare
+      // the person with an error message for backing out.
+      if (!err?.userCancelled) {
+        setError(err.message || 'Could not complete the purchase.')
+      }
     } finally {
-      setUnlocking(false)
+      setPurchasing(false)
+    }
+  }
+
+  const handleRestore = async () => {
+    setError('')
+    setRestoring(true)
+    try {
+      const entitled = await restorePurchases()
+      if (entitled) {
+        await syncPremiumToProfile()
+        await refreshProfile()
+      } else {
+        setError('No previous purchase found on this account.')
+      }
+    } catch (err) {
+      setError(err.message || 'Could not restore purchases.')
+    } finally {
+      setRestoring(false)
     }
   }
 
@@ -41,7 +81,7 @@ export default function Premium() {
         <div className="card p-6 max-w-sm mx-auto space-y-2">
           <p className="text-sm text-muted">Unlocked because you</p>
           <p className="text-ink font-semibold">
-            {fame >= FAME_THRESHOLD ? `Reached ${FAME_THRESHOLD}+ fame 🌟` : 'Purchased with coins 🪙'}
+            {fame >= FAME_THRESHOLD ? `Reached ${FAME_THRESHOLD}+ fame 🌟` : 'Purchased Premium 👑'}
           </p>
         </div>
       </div>
@@ -54,7 +94,7 @@ export default function Premium() {
       <h1 className="font-display text-3xl md:text-4xl">Premium</h1>
       <p className="text-muted text-sm max-w-md mx-auto">
         A crown badge on your profile, and bragging rights. Unlock it by reaching{' '}
-        {FAME_THRESHOLD} fame, or skip the wait with coins.
+        {FAME_THRESHOLD} fame, or skip the wait with a one-time purchase.
       </p>
 
       <div className="card p-6 max-w-sm mx-auto space-y-3">
@@ -83,18 +123,32 @@ export default function Premium() {
 
       <div className="card p-6 max-w-sm mx-auto space-y-3">
         <p className="text-sm text-muted">Skip straight to it</p>
-        <button
-          onClick={handleUnlock}
-          disabled={unlocking || !canAfford}
-          className="btn-primary w-full"
-        >
-          {unlocking ? 'Unlocking…' : `Unlock for ${UNLOCK_COST} 🪙`}
-        </button>
-        {!canAfford && (
+
+        {!isNative ? (
           <p className="text-xs text-muted">
-            You have {profile?.coins ?? 0} coins — spin daily to earn more.
+            Purchases are only available in the installed app, not the web preview.
           </p>
+        ) : loadingPkg ? (
+          <p className="text-xs text-muted font-mono">loading…</p>
+        ) : !pkg ? (
+          <p className="text-xs text-muted">
+            Premium isn't available for purchase right now — check back soon.
+          </p>
+        ) : (
+          <>
+            <button onClick={handlePurchase} disabled={purchasing} className="btn-primary w-full">
+              {purchasing ? 'Processing…' : `Unlock for ${pkg.product.priceString}`}
+            </button>
+            <button
+              onClick={handleRestore}
+              disabled={restoring || purchasing}
+              className="text-xs text-muted hover:text-ink transition-colors"
+            >
+              {restoring ? 'Restoring…' : 'Restore previous purchase'}
+            </button>
+          </>
         )}
+
         {error && <p className="text-heart-red text-sm">{error}</p>}
       </div>
     </div>
