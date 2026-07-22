@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import VerifiedBadge from './VerifiedBadge'
 
 const PUBLIC_LINKS = [
   { to: '/dashboard', icon: '💜', label: 'Home', authOnly: true },
   { to: '/announcements', icon: '📣', label: 'Announcements' },
-  { to: '/featured', icon: '🏆', label: 'Featured' },
+  { to: '/event', icon: '🎉', label: 'Event' },
+  { to: '/featured', icon: '🏆', label: 'LEADERBOARD' },
   { to: '/thoughts', icon: '💭', label: 'Thoughts' },
   { to: '/polls', icon: '🗳️', label: 'Polls' },
 ]
@@ -13,6 +15,9 @@ const PUBLIC_LINKS = [
 const AUTH_LINKS = [
   { to: '/spin', icon: '🎡', label: 'Spin' },
   { to: '/inventory', icon: '🎒', label: 'Inventory' },
+  { to: '/shop', icon: '🛍️', label: 'Shop' },
+  { to: '/missions', icon: '🎯', label: 'Missions' },
+  { to: '/mystery-word', icon: '🔮', label: 'Mystery Word' },
   { to: '/messages', icon: '💌', label: 'Messages' },
   { to: '/notifications', icon: '🔔', label: 'Notifications', badge: true },
   { to: '/premium', icon: '👑', label: 'Premium' },
@@ -107,8 +112,11 @@ export default function Sidebar({ open, onClose }) {
           {session ? (
             <div className="space-y-3">
               {profile && (
-                <div className="flex items-center justify-between text-xs text-muted px-1">
-                  <span className="font-mono text-ink truncate">@{profile.username}</span>
+                <div className="flex items-center justify-between text-xs text-muted px-1 gap-2">
+                  <span className="font-mono text-ink truncate flex items-center">
+                    @{profile.username}
+                    <VerifiedBadge verified={Boolean(profile?.is_verified)} className="ml-1" />
+                  </span>
                   <span className="whitespace-nowrap">🪙 {profile.coins ?? 0}</span>
                 </div>
               )}

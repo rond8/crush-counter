@@ -13,6 +13,21 @@
     background-image: radial-gradient(circle at 20% 0%, rgba(181, 123, 255, 0.12), transparent 45%),
       radial-gradient(circle at 85% 15%, rgba(255, 92, 122, 0.10), transparent 40%);
     background-attachment: fixed;
+    /* Disables the native long-press behavior — the "Copy / Share /
+       Open link" popup on links and images, and the text-selection
+       magnifier — so long-pressing anywhere feels like a native app
+       instead of a web page. Re-enabled below for actual text inputs,
+       since people still need to select/edit what they type. */
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  input,
+  textarea,
+  [contenteditable='true'] {
+    -webkit-touch-callout: default;
+    -webkit-user-select: text;
+    user-select: text;
   }
   ::selection {
     background: rgba(181, 123, 255, 0.35);
@@ -38,6 +53,102 @@
   .input-field {
     @apply w-full bg-midnight border border-midnight-border rounded-xl px-4 py-3 text-ink placeholder:text-muted/60
       focus:border-heart-purple/70 transition-colors;
+  }
+
+  .shadow-glow {
+    box-shadow: 0 6px 22px rgba(181, 123, 255, 0.12), 0 2px 6px rgba(255, 92, 122, 0.06);
+  }
+
+  .mutual-animate {
+    animation: mutualPulse 900ms ease-in-out infinite;
+    transform-origin: center;
+  }
+
+  .animate-pulseGlow {
+    animation: pulseGlow 1600ms ease-in-out infinite;
+  }
+
+  @keyframes mutualPulse {
+    0% {
+      transform: scale(1);
+      filter: drop-shadow(0 0 0 rgba(181,123,255,0));
+    }
+    50% {
+      transform: scale(1.08) rotate(-1deg);
+      filter: drop-shadow(0 8px 24px rgba(181,123,255,0.18));
+    }
+    100% {
+      transform: scale(1) rotate(0deg);
+      filter: drop-shadow(0 0 0 rgba(181,123,255,0));
+    }
+  }
+
+  @keyframes pulseGlow {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.03); opacity: 0.9; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  /* Fullscreen mutual match overlay */
+  .mutual-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 60;
+    background: linear-gradient(180deg, rgba(24, 6, 37, 0.72), rgba(12, 7, 20, 0.86));
+    backdrop-filter: blur(6px) saturate(1.1);
+  }
+
+  .mutual-overlay__card {
+    @apply bg-midnight-surface border border-midnight-border rounded-3xl p-6 text-center max-w-md w-full;
+    transform-origin: center;
+    animation: mutualPulse 950ms ease-in-out both;
+  }
+
+  .mutual-heart {
+    font-size: 3.25rem;
+    filter: drop-shadow(0 12px 28px rgba(181,123,255,0.18));
+    animation: floatUp 2000ms ease-in-out infinite;
+  }
+
+  .mutual-overlay__hearts {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  .mutual-overlay__hearts span {
+    position: absolute;
+    font-size: 1.75rem;
+    opacity: 0.95;
+    animation: heartRise linear infinite;
+  }
+
+  @keyframes floatUp {
+    0% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-6px) scale(1.05); }
+    100% { transform: translateY(0) scale(1); }
+  }
+
+  @keyframes heartRise {
+    0% { transform: translateY(20vh) translateX(0) scale(0.9); opacity: 0; }
+    10% { opacity: 1; }
+    100% { transform: translateY(-30vh) translateX(40vw) scale(1.1); opacity: 0; }
+  }
+
+  /*
+   * Fixes fixed-position bottom elements (like BottomTabBar) being
+   * rendered behind the Android system navigation bar once the app
+   * targets SDK 35+ (Android 15 edge-to-edge enforcement). Capacitor
+   * 8.3+ injects --safe-area-inset-bottom from Android's own system
+   * insets; env(safe-area-inset-bottom) covers iOS the same way.
+   * Apply this class to whatever element has `fixed bottom-0`.
+   */
+  .safe-area-bottom {
+    padding-bottom: max(0.5rem, var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
   }
 }
 

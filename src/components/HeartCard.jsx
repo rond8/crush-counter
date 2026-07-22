@@ -2,9 +2,14 @@ import { Link } from 'react-router-dom'
 import { isOnline } from '../lib/presence'
 import { timeAgo } from '../lib/time'
 
+// Drop your own image files at these paths under the project's
+// public/ folder (e.g. public/images/hearts/purple.png) — Vite
+// serves anything in public/ directly at the matching URL, no import
+// needed. Any image format works (png, svg, webp, etc.) as long as
+// the filename/extension matches what's listed below.
 const STATUS_CONFIG = {
   purple: {
-    emoji: '💜',
+    icon: '/images/hearts/purple.png',
     label: 'Mutual match',
     detail: 'You like them, and they like you back.',
     ring: 'ring-heart-purple/50',
@@ -12,7 +17,7 @@ const STATUS_CONFIG = {
     text: 'text-heart-purple',
   },
   green: {
-    emoji: '💚',
+    icon: '/images/hearts/green.png',
     label: 'Competition',
     detail: 'Someone else has also sent a heart to your crush.',
     ring: 'ring-heart-green/40',
@@ -20,7 +25,7 @@ const STATUS_CONFIG = {
     text: 'text-heart-green',
   },
   yellow: {
-    emoji: '💛',
+    icon: '/images/hearts/yellow.png',
     label: 'Invite needed',
     detail: "This username isn't on Crush Counter yet — invite them!",
     ring: 'ring-heart-yellow/40',
@@ -28,7 +33,7 @@ const STATUS_CONFIG = {
     text: 'text-heart-yellow',
   },
   pending: {
-    emoji: '🤍',
+    icon: '/images/hearts/pending.png',
     label: 'Sent',
     detail: 'Waiting to see if it’s mutual.',
     ring: 'ring-midnight-border',
@@ -45,9 +50,11 @@ export default function HeartCard({ username, status, lastSeen }) {
 
   return (
     <div className={`card ring-1 ${config.ring} ${config.glow} p-4 flex items-center gap-4`}>
-      <span className="text-3xl leading-none" aria-hidden="true">
-        {config.emoji}
-      </span>
+      <img
+        src={config.icon}
+        alt={config.label}
+        className={`w-9 h-9 shrink-0 ${status === 'purple' ? 'mutual-animate' : ''}`}
+      />
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2 flex-wrap">
           {showPresence ? (

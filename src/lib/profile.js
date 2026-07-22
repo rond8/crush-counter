@@ -18,7 +18,7 @@ export async function unlockPremium() {
 export async function getProfileByUsername(username) {
   const { data, error } = await supabase
     .from('profiles')
-    .select('username, display_name, avatar_url, gender, relationship_status, age, location, bio, last_seen, fame, premium_unlocked')
+    .select('username, display_name, avatar_url, gender, relationship_status, age, location, bio, last_seen, fame, premium_unlocked, is_verified')
     .eq('username', username.trim().toLowerCase())
     .maybeSingle()
   if (error) throw error

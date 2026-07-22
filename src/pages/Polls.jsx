@@ -5,6 +5,11 @@ import { getPollRows, groupPolls, createPoll, closePoll, votePoll } from '../lib
 import { timeAgo } from '../lib/time'
 
 const MAX_OPTIONS = 6
+const DEFAULT_COLOR = '#B57BFF'
+
+function emptyOption() {
+  return { label: '', imageUrl: '', color: '' }
+}
 
 export default function Polls() {
   const { session, profile } = useAuth()
@@ -16,7 +21,7 @@ export default function Polls() {
   const [error, setError] = useState('')
 
   const [question, setQuestion] = useState('')
-  const [options, setOptions] = useState(['', ''])
+  const [options, setOptions] = useState([emptyOption(), emptyOption()])
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
 
@@ -34,12 +39,12 @@ export default function Polls() {
       .finally(() => setLoading(false))
   }, [refresh])
 
-  const updateOption = (i, value) => {
-    setOptions((prev) => prev.map((o, idx) => (idx === i ? value : o)))
+  const updateOption = (i, field, value) => {
+    setOptions((prev) => prev.map((o, idx) => (idx === i ? { ...o, [field]: value } : o)))
   }
 
   const addOption = () => {
-    if (options.length < MAX_OPTIONS) setOptions((prev) => [...prev, ''])
+    if (options.length < MAX_OPTIONS) setOptions((prev) => [...prev, emptyOption()])
   }
 
   const removeOption = (i) => {
@@ -49,7 +54,9 @@ export default function Polls() {
   const handleCreate = async (e) => {
     e.preventDefault()
     setCreateError('')
-    const validOptions = options.map((o) => o.trim()).filter(Boolean)
+    const validOptions = options
+      .map((o) => ({ label: o.label.trim(), imageUrl: o.imageUrl.trim(), color: o.color }))
+      .filter((o) => o.label)
     if (!question.trim() || validOptions.length < 2) {
       setCreateError('Add a question and at least 2 options.')
       return
@@ -58,7 +65,7 @@ export default function Polls() {
     try {
       await createPoll(question, validOptions)
       setQuestion('')
-      setOptions(['', ''])
+      setOptions([emptyOption(), emptyOption()])
       await refresh()
     } catch (err) {
       setCreateError(err.message || 'Could not create that poll.')
@@ -107,25 +114,43 @@ export default function Polls() {
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
           />
-          <div className="space-y-2">
+          <div className="space-y-3">
             {options.map((opt, i) => (
-              <div key={i} className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder={`Option ${i + 1}`}
-                  className="input-field"
-                  value={opt}
-                  onChange={(e) => updateOption(i, e.target.value)}
-                />
-                {options.length > 2 && (
-                  <button
-                    type="button"
-                    onClick={() => removeOption(i)}
-                    className="btn-ghost !px-3 !py-2 text-sm"
-                  >
-                    ×
-                  </button>
-                )}
+              <div key={i} className="card p-3 space-y-2">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder={`Option ${i + 1}`}
+                    className="input-field"
+                    value={opt.label}
+                    onChange={(e) => updateOption(i, 'label', e.target.value)}
+                  />
+                  {options.length > 2 && (
+                    <button
+                      type="button"
+                      onClick={() => removeOption(i)}
+                      className="btn-ghost !px-3 !py-2 text-sm"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="url"
+                    placeholder="Image URL (optional)"
+                    className="input-field text-xs flex-1"
+                    value={opt.imageUrl}
+                    onChange={(e) => updateOption(i, 'imageUrl', e.target.value)}
+                  />
+                  <input
+                    type="color"
+                    className="w-9 h-9 rounded-lg border border-midnight-border bg-midnight cursor-pointer shrink-0"
+                    value={opt.color || DEFAULT_COLOR}
+                    onChange={(e) => updateOption(i, 'color', e.target.value)}
+                    title="Option color (optional)"
+                  />
+                </div>
               </div>
             ))}
           </div>
@@ -170,17 +195,28 @@ export default function Polls() {
                     const isMine = poll.my_option_id === opt.id
 
                     if (showResults) {
+                      const barColor = opt.color || (isMine ? '#B57BFF' : '#3A2650')
                       return (
-                        <div key={opt.id} className="relative overflow-hidden rounded-xl border border-midnight-border">
+                        <div
+                          key={opt.id}
+                          className="relative overflow-hidden rounded-xl border border-midnight-border"
+                        >
                           <div
-                            className={`absolute inset-y-0 left-0 ${isMine ? 'bg-heart-purple/30' : 'bg-midnight-border/60'}`}
-                            style={{ width: `${pct}%` }}
+                            className="absolute inset-y-0 left-0 opacity-40"
+                            style={{ width: `${pct}%`, backgroundColor: barColor }}
                           />
-                          <div className="relative flex items-center justify-between px-4 py-2.5 text-sm">
-                            <span className={isMine ? 'text-ink font-semibold' : 'text-ink'}>
+                          <div className="relative flex items-center gap-3 px-4 py-2.5 text-sm">
+                            {opt.image_url && (
+                              <img
+                                src={opt.image_url}
+                                alt=""
+                                className="w-8 h-8 rounded-lg object-cover shrink-0"
+                              />
+                            )}
+                            <span className={`flex-1 ${isMine ? 'text-ink font-semibold' : 'text-ink'}`}>
                               {opt.label} {isMine && '✓'}
                             </span>
-                            <span className="text-muted">
+                            <span className="text-muted whitespace-nowrap">
                               {pct}% ({opt.vote_count})
                             </span>
                           </div>
@@ -193,9 +229,13 @@ export default function Polls() {
                         key={opt.id}
                         onClick={() => handleVote(opt.id)}
                         disabled={votingOptionId === opt.id}
-                        className="w-full text-left px-4 py-2.5 rounded-xl border border-midnight-border text-sm text-ink hover:border-heart-purple/50 hover:bg-midnight-surface transition-colors"
+                        className="w-full flex items-center gap-3 text-left px-4 py-2.5 rounded-xl border border-midnight-border text-sm text-ink hover:border-heart-purple/50 hover:bg-midnight-surface transition-colors"
+                        style={opt.color ? { borderLeftColor: opt.color, borderLeftWidth: '4px' } : undefined}
                       >
-                        {votingOptionId === opt.id ? 'Voting…' : opt.label}
+                        {opt.image_url && (
+                          <img src={opt.image_url} alt="" className="w-8 h-8 rounded-lg object-cover shrink-0" />
+                        )}
+                        <span className="flex-1">{votingOptionId === opt.id ? 'Voting…' : opt.label}</span>
                       </button>
                     )
                   })}

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import VerifiedBadge from './VerifiedBadge'
 
 export default function Navbar() {
   const { session, profile, signOut, unreadCount } = useAuth()
@@ -58,8 +59,9 @@ export default function Navbar() {
                 💌 Messages
               </Link>
               {profile?.username && (
-                <Link to="/profile" className="font-mono text-sm text-muted hover:text-ink transition-colors">
+                <Link to="/profile" className="font-mono text-sm text-muted hover:text-ink transition-colors flex items-center gap-1">
                   @{profile.username}
+                  <VerifiedBadge verified={Boolean(profile?.is_verified)} />
                 </Link>
               )}
               <button onClick={handleSignOut} className="btn-ghost !px-4 !py-2 text-sm">
@@ -157,9 +159,10 @@ export default function Navbar() {
                 <Link
                   to="/profile"
                   onClick={closeMenu}
-                  className="px-2 py-2.5 rounded-lg text-sm font-mono text-muted hover:bg-midnight hover:text-ink transition-colors"
+                  className="px-2 py-2.5 rounded-lg text-sm font-mono text-muted hover:bg-midnight hover:text-ink transition-colors flex items-center gap-1"
                 >
                   @{profile.username}
+                  <VerifiedBadge verified={Boolean(profile?.is_verified)} />
                 </Link>
               )}
               <button

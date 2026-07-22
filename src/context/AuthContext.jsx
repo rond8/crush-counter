@@ -6,6 +6,7 @@ import { checkNewAdmirers } from '../lib/crush'
 import { getUnreadNotificationCount } from '../lib/notifications'
 import { maybeShowLaunchAd } from '../lib/ads'
 import { initPurchases } from '../lib/purchases'
+import { claimReferral, PENDING_REFERRAL_STORAGE_KEY } from '../lib/missions'
 
 const HEARTBEAT_INTERVAL_MS = 45 * 1000
 const ADMIRER_POLL_INTERVAL_MS = 60 * 1000
@@ -28,7 +29,7 @@ export function AuthProvider({ children }) {
     const { data, error } = await supabase
       .from('profiles')
       .select(
-        'id, username, display_name, is_admin, avatar_url, gender, relationship_status, age, location, bio, coins, fame, leaderboard_opt_in, premium_unlocked, ad_free_spins'
+        'id, username, display_name, is_admin, is_verified, avatar_url, gender, relationship_status, age, location, bio, coins, fame, leaderboard_opt_in, premium_unlocked, ad_free_spins'
       )
       .eq('id', userId)
       .maybeSingle()
@@ -117,6 +118,30 @@ export function AuthProvider({ children }) {
       clearInterval(interval)
       document.removeEventListener('visibilitychange', check)
     }
+  }, [session?.user?.id])
+
+  // Claim a pending referral left by Register.jsx if email
+  // confirmation meant there was no session yet at signup time. Runs
+  // once per new user id; harmless to re-run since claim_referral()
+  // is idempotent server-side.
+  useEffect(() => {
+    const userId = session?.user?.id
+    if (!userId) return
+    let pending
+    try {
+      pending = localStorage.getItem(PENDING_REFERRAL_STORAGE_KEY)
+    } catch {
+      return
+    }
+    if (!pending) return
+    claimReferral(pending).finally(() => {
+      try {
+        localStorage.removeItem(PENDING_REFERRAL_STORAGE_KEY)
+      } catch {
+        // Not critical if this doesn't clear — worst case it retries
+        // harmlessly next session.
+      }
+    })
   }, [session?.user?.id])
 
   const signUp = async ({ email, password, username, displayName, age }) => {

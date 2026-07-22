@@ -113,3 +113,34 @@ export async function syncPremiumToProfile() {
   const { error } = await supabase.rpc('mark_premium_purchased')
   if (error) throw error
 }
+
+/**
+ * Find a specific package by its underlying store product identifier
+ * within the current Offering — used by the Shop to buy one specific
+ * item, as opposed to getPremiumPackage()'s "pick the lifetime one."
+ * Returns null if that product isn't configured/available.
+ */
+export async function getShopPackage(productIdentifier) {
+  if (!Capacitor.isNativePlatform() || !productIdentifier) return null
+  try {
+    const offerings = await Purchases.getOfferings()
+    const current = offerings.current
+    if (!current) return null
+    return current.availablePackages.find((p) => p.product.identifier === productIdentifier) ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Buy a consumable (repeatable) item. Unlike purchasePremium(), this
+ * doesn't check an entitlement afterward — consumables in RevenueCat
+ * aren't entitlement-gated, a successful purchasePackage() call IS
+ * the confirmation. Throws on failure; the error has
+ * `userCancelled: true` if the person just closed the purchase sheet.
+ * Caller is responsible for granting the item server-side afterward
+ * (see grantPurchasedItem in lib/shop.js).
+ */
+export async function purchaseConsumable(pkg) {
+  await Purchases.purchasePackage({ aPackage: pkg })
+}

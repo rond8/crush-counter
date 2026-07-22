@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { updatePassword, updateEmail, deleteMyAccount } from '../lib/account'
+import { getAdsLive, setAdsLive } from '../lib/ads'
 
 export default function Settings() {
-  const { user, signOut } = useAuth()
+  const { user, profile, signOut } = useAuth()
   const navigate = useNavigate()
+  const isAdmin = Boolean(profile?.is_admin)
 
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -22,6 +24,33 @@ export default function Settings() {
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+
+  const [adsLive, setAdsLiveState] = useState(null)
+  const [loadingAds, setLoadingAds] = useState(isAdmin)
+  const [togglingAds, setTogglingAds] = useState(false)
+  const [adsError, setAdsError] = useState('')
+
+  useEffect(() => {
+    if (!isAdmin) return
+    getAdsLive()
+      .then(setAdsLiveState)
+      .catch((err) => setAdsError(err.message || 'Could not load ad settings.'))
+      .finally(() => setLoadingAds(false))
+  }, [isAdmin])
+
+  const handleToggleAds = async () => {
+    setAdsError('')
+    setTogglingAds(true)
+    try {
+      const next = !adsLive
+      await setAdsLive(next)
+      setAdsLiveState(next)
+    } catch (err) {
+      setAdsError(err.message || 'Could not update ad settings.')
+    } finally {
+      setTogglingAds(false)
+    }
+  }
 
   const handlePasswordSubmit = async (e) => {
     e.preventDefault()
@@ -84,6 +113,33 @@ export default function Settings() {
         <h1 className="font-display text-3xl">Settings</h1>
         <p className="text-muted text-sm">{user?.email}</p>
       </section>
+
+      {isAdmin && (
+        <section className="card p-6 space-y-4 ring-1 ring-heart-purple/40">
+          <h2 className="font-display text-lg">🛠️ Admin — Ads</h2>
+          <p className="text-sm text-muted">
+            Toggle real AdMob ads on/off remotely — no app update needed. Off serves Google's test
+            ads only. Takes effect the next time someone opens the app, not instantly.
+          </p>
+          {loadingAds ? (
+            <p className="text-xs text-muted font-mono">loading…</p>
+          ) : (
+            <div className="flex items-center justify-between gap-4">
+              <span className={`text-sm font-semibold ${adsLive ? 'text-heart-green' : 'text-muted'}`}>
+                {adsLive ? '🟢 Real ads are LIVE' : '⚪ Test ads only'}
+              </span>
+              <button
+                onClick={handleToggleAds}
+                disabled={togglingAds}
+                className={`!px-4 !py-2 text-sm ${adsLive ? 'btn-ghost !border-heart-red/50 !text-heart-red' : 'btn-primary'}`}
+              >
+                {togglingAds ? 'Saving…' : adsLive ? 'Turn off real ads' : 'Turn on real ads'}
+              </button>
+            </div>
+          )}
+          {adsError && <p className="text-heart-red text-sm">{adsError}</p>}
+        </section>
+      )}
 
       <form onSubmit={handlePasswordSubmit} className="card p-6 space-y-4">
         <h2 className="font-display text-lg">Change password</h2>

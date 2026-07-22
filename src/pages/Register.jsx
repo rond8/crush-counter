@@ -1,14 +1,16 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { calculateAge, MINIMUM_AGE } from '../lib/age'
-import FacebookButton from '../components/FacebookButton'
+import { claimReferral, PENDING_REFERRAL_STORAGE_KEY } from '../lib/missions'
 
 const USERNAME_RE = /^[a-z0-9_]{3,20}$/
 
 export default function Register() {
   const { signUp } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const refCode = searchParams.get('ref')
   const [email, setEmail] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -53,9 +55,22 @@ export default function Register() {
     try {
       const data = await signUp({ email, password, username: cleanUsername, age })
       if (!data.session) {
-        // Email confirmation is enabled on the Supabase project.
+        // Email confirmation is enabled on the Supabase project —
+        // there's no session yet to attribute the referral to, so
+        // remember the code and let AuthContext claim it once they
+        // actually log in for the first time.
+        if (refCode) {
+          try {
+            localStorage.setItem(PENDING_REFERRAL_STORAGE_KEY, refCode)
+          } catch {
+            // Storage unavailable — not worth blocking signup over.
+          }
+        }
         setConfirmationNeeded(true)
       } else {
+        if (refCode) {
+          claimReferral(refCode).catch(() => {})
+        }
         navigate('/dashboard')
       }
     } catch (err) {
@@ -161,14 +176,6 @@ export default function Register() {
             {submitting ? 'Creating account…' : 'Create account'}
           </button>
         </form>
-
-        <div className="flex items-center gap-3 my-6 text-xs text-muted">
-          <span className="flex-1 h-px bg-midnight-border" />
-          or
-          <span className="flex-1 h-px bg-midnight-border" />
-        </div>
-
-        <FacebookButton />
 
         <p className="text-center text-sm text-muted mt-6">
           Already have an account?{' '}

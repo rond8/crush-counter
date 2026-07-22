@@ -14,6 +14,7 @@ const TYPE_CONFIG = {
   mention: { icon: '📣', accent: 'ring-heart-yellow/40' },
   fame_gift: { icon: '🌟', accent: 'ring-heart-yellow/40' },
   priority: { icon: '⚔️', accent: 'ring-heart-yellow/40' },
+  fame_loss: { icon: '🏹', accent: 'ring-heart-red/40' },
 }
 
 export default function NotificationsPage() {

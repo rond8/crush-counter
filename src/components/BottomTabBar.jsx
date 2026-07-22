@@ -3,9 +3,10 @@ import { useAuth } from '../context/AuthContext'
 
 const TABS = [
   { to: '/dashboard', icon: '💜', label: 'Home' },
-  { to: '/notifications', icon: '🔔', label: 'Notif', badge: true },
-  { to: '/settings', icon: '⚙️', label: 'Settings' },
+  { to: '/spin', icon: '🎡', label: 'Spin' },
+  { to: '/random-chat', icon: '🎲', label: 'Random' },
   { to: '/profile', icon: '👤', label: 'Profile' },
+  { to: '/settings', icon: '⚙️', label: 'Settings' },
 ]
 
 export default function BottomTabBar() {
@@ -15,10 +16,7 @@ export default function BottomTabBar() {
   if (!session) return null
 
   return (
-    <nav
-      className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-midnight-surface border-t border-midnight-border/60 flex"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-    >
+    <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-midnight-surface border-t border-midnight-border/60 flex safe-area-bottom">
       {TABS.map((tab) => {
         const active = location.pathname === tab.to
         return (

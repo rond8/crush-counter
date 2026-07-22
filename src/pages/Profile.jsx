@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getReceivedCount, getMatches } from '../lib/crush'
+import VerifiedBadge from '../components/VerifiedBadge'
 
 export default function Profile() {
   const { profile } = useAuth()
@@ -51,6 +52,7 @@ export default function Profile() {
                 👑
               </span>
             )}
+            <VerifiedBadge verified={Boolean(profile?.is_verified)} />
           </h1>
           {metaLine && <p className="text-muted text-sm mt-1">{metaLine}</p>}
         </div>

@@ -2,47 +2,60 @@ import { Capacitor } from '@capacitor/core'
 import { AdMob } from '@capacitor-community/admob'
 import { supabase } from '../supabaseClient'
 
-// Google's official TEST ad unit IDs. Safe to ship during development
-// — showing your real ad unit IDs before release risks Google
-// flagging your AdMob account for invalid traffic from dev testing.
-//
-// Swap these for your real IDs once you're ready to actually publish
-// (from your AdMob dashboard: App_Open_Splash =
-// ca-app-pub-3066204861051598/1525955762, y_ad (Rewarded) =
-// ca-app-pub-3066204861051598/3668335151).
-//
-// Note: this plugin doesn't support the "App Open" ad format
-// specifically — an Interstitial ad shown right on launch is the
-// standard substitute, and is what's wired up below. If you want a
-// true App Open ad, that's a separate native format you'd add
-// directly in Android Studio.
+// Google's official TEST ad unit IDs. Always safe to serve — used
+// whenever the remote ads_live toggle (see below) is off.
 const TEST_INTERSTITIAL_ID = 'ca-app-pub-3940256099942544/1033173712'
 const TEST_REWARDED_ID = 'ca-app-pub-3940256099942544/5224354917'
 
-const LAUNCH_AD_UNIT_ID = TEST_INTERSTITIAL_ID
-const REWARDED_AD_UNIT_ID = TEST_REWARDED_ID
+// Your real, live ad unit IDs from the AdMob dashboard (Apps ->
+// Crush Counter -> Ad units). Note this plugin doesn't support the
+// "App Open" ad format specifically — an Interstitial ad shown right
+// on launch is the standard substitute, and is what's wired up below,
+// reusing the App_Open_Splash unit for that purpose.
+const REAL_INTERSTITIAL_ID = 'ca-app-pub-3066204861051598/1525955762' // App_Open_Splash
+const REAL_REWARDED_ID = 'ca-app-pub-3066204861051598/3668335151' // y_ad
 
-// Minimum time between launch-ad shows. Launch ads are only ever
-// triggered from an explicit login action now (see
-// AuthContext.signIn) — never from app foreground/visibility events,
-// which felt spammy. This cooldown is just a cheap safety net against
-// accidental double-fires (e.g. a fast double-submit of the login
-// form).
+// Minimum time between launch-ad shows. Launch ads only ever trigger
+// from an explicit login action (see AuthContext.signIn), never from
+// app foreground/visibility events — this cooldown is just a cheap
+// safety net against accidental double-fires.
 const LAUNCH_AD_COOLDOWN_MS = 3 * 60 * 1000
 
+// Whether to serve real ads this session — fetched once from
+// Supabase in initAds() and cached for the rest of the app's
+// lifetime. Toggling app_config.ads_live remotely takes effect the
+// NEXT time someone opens the app, not instantly mid-session.
+let adsLive = false
 let initialized = false
 let launchAdReady = false
 let lastShownAt = 0
 
+function launchAdUnitId() {
+  return adsLive ? REAL_INTERSTITIAL_ID : TEST_INTERSTITIAL_ID
+}
+function rewardedAdUnitId() {
+  return adsLive ? REAL_REWARDED_ID : TEST_REWARDED_ID
+}
+
 /**
  * Initialize the AdMob SDK. Safe to call multiple times — no-ops
  * after the first successful call. Also a no-op on web (ads are
- * native-only).
+ * native-only). Fetches the remote ads_live flag first; if that
+ * fetch fails for any reason, falls back to test ads rather than
+ * risk accidentally serving real ones.
  */
 export async function initAds() {
   if (initialized || !Capacitor.isNativePlatform()) return
+
   try {
-    await AdMob.initialize({ initializeForTesting: true })
+    const { data, error } = await supabase.rpc('get_app_config')
+    adsLive = error ? false : Boolean(data?.[0]?.ads_live)
+  } catch {
+    adsLive = false
+  }
+
+  try {
+    await AdMob.initialize({ initializeForTesting: !adsLive })
     initialized = true
     preloadLaunchAd()
   } catch {
@@ -52,7 +65,7 @@ export async function initAds() {
 
 async function preloadLaunchAd() {
   try {
-    await AdMob.prepareInterstitial({ adId: LAUNCH_AD_UNIT_ID, isTesting: true })
+    await AdMob.prepareInterstitial({ adId: launchAdUnitId(), isTesting: !adsLive })
     launchAdReady = true
   } catch {
     launchAdReady = false
@@ -84,21 +97,13 @@ export async function maybeShowLaunchAd() {
  * Show a rewarded ad and, only if the person actually watches it to
  * completion, claim the reward via claim_ad_reward(). rewardType is
  * 'coins' or 'spin'. Returns { new_coins, new_free_spins } or throws.
- *
- * showRewardVideoAd() resolves with the earned AdMobRewardItem
- * directly once the reward is granted — that's the plugin's own
- * documented pattern, and the reliable way to detect completion.
- * (An earlier version of this raced the Rewarded and Dismissed
- * events against each other, which could resolve as "not rewarded"
- * even on a genuinely completed watch, since both events can fire
- * close together and either could win the race.)
  */
 export async function watchRewardedAd(rewardType) {
   if (!Capacitor.isNativePlatform()) {
     throw new Error('Ads are only available in the installed app, not the web preview.')
   }
 
-  await AdMob.prepareRewardVideoAd({ adId: REWARDED_AD_UNIT_ID, isTesting: true })
+  await AdMob.prepareRewardVideoAd({ adId: rewardedAdUnitId(), isTesting: !adsLive })
 
   let rewardItem
   try {
@@ -114,4 +119,23 @@ export async function watchRewardedAd(rewardType) {
   const { data, error } = await supabase.rpc('claim_ad_reward', { p_reward_type: rewardType })
   if (error) throw error
   return data?.[0] ?? { new_coins: null, new_free_spins: null }
+}
+
+/**
+ * Admin: read the current remote ads_live value (for a Settings
+ * toggle UI).
+ */
+export async function getAdsLive() {
+  const { data, error } = await supabase.rpc('get_app_config')
+  if (error) throw error
+  return Boolean(data?.[0]?.ads_live)
+}
+
+/**
+ * Admin-only: flip real ads on/off remotely. Takes effect for
+ * sessions that start AFTER this call, not the current one.
+ */
+export async function setAdsLive(live) {
+  const { error } = await supabase.rpc('set_ads_live', { p_live: live })
+  if (error) throw error
 }

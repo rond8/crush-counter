@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { getCurrentEvent } from '../lib/event'
 
 const LEGEND = [
   { emoji: '💜', label: 'Mutual match', detail: 'You like them, and they like you back.' },
@@ -8,6 +10,16 @@ const LEGEND = [
 ]
 
 export default function Home() {
+  const [event, setEvent] = useState(null)
+
+  useEffect(() => {
+    getCurrentEvent()
+      .then(setEvent)
+      .catch(() => {
+        // Non-critical — the landing page works fine with no banner.
+      })
+  }, [])
+
   return (
     <div className="max-w-2xl mx-auto px-6 py-14 space-y-14">
       <section className="text-center space-y-4">
@@ -28,6 +40,27 @@ export default function Home() {
           </Link>
         </div>
       </section>
+
+      {event && (
+        <Link
+          to="/event"
+          className="card p-4 flex items-center gap-4 ring-1 ring-heart-purple/40 hover:ring-heart-purple/70 transition-shadow"
+        >
+          {event.image_url ? (
+            <img src={event.image_url} alt="" className="w-14 h-14 rounded-xl object-cover shrink-0" />
+          ) : (
+            <span className="text-3xl shrink-0">🎉</span>
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-heart-purple font-semibold uppercase tracking-wide">
+              Happening now
+            </p>
+            <p className="text-sm font-semibold text-ink truncate">{event.title}</p>
+            <p className="text-xs text-muted line-clamp-1">{event.body}</p>
+          </div>
+          <span className="text-muted text-sm shrink-0">→</span>
+        </Link>
+      )}
 
       <section>
         <h2 className="font-display text-xl text-center mb-4">How it works</h2>

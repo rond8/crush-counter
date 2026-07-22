@@ -8,6 +8,7 @@ import { reportUser } from '../lib/reports'
 import { isOnline } from '../lib/presence'
 import { timeAgo } from '../lib/time'
 import ReportModal from '../components/ReportModal'
+import VerifiedBadge from '../components/VerifiedBadge'
 
 export default function UserProfile() {
   const { username } = useParams()
@@ -143,6 +144,7 @@ export default function UserProfile() {
                 👑
               </span>
             )}
+            <VerifiedBadge verified={Boolean(target?.is_verified)} />
           </h1>
           <div className="flex items-center justify-center gap-1.5 text-xs text-muted mt-1">
             <span className={`w-1.5 h-1.5 rounded-full ${online ? 'bg-heart-green' : 'bg-midnight-border'}`} />

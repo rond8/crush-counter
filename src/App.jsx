@@ -5,6 +5,7 @@ import MobileTopBar from './components/MobileTopBar'
 import BottomTabBar from './components/BottomTabBar'
 import FloatingHearts from './components/FloatingHearts'
 import Notifications from './components/Notifications'
+import PullToRefresh from './components/PullToRefresh'
 import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
 import Home from './pages/Home'
@@ -22,6 +23,11 @@ import Thoughts from './pages/Thoughts'
 import Polls from './pages/Polls'
 import Spin from './pages/Spin'
 import Inventory from './pages/Inventory'
+import RandomChat from './pages/RandomChat'
+import Missions from './pages/Missions'
+import Event from './pages/Event'
+import Shop from './pages/Shop'
+import MysteryWord from './pages/MysteryWord'
 import Chat from './pages/Chat'
 import Featured from './pages/Featured'
 import Premium from './pages/Premium'
@@ -57,6 +63,7 @@ export default function App() {
     return (
       <div className="min-h-screen flex flex-col">
         <FloatingHearts />
+        <PullToRefresh />
         <Routes>
           <Route path="*" element={<CompleteProfile />} />
         </Routes>
@@ -67,6 +74,7 @@ export default function App() {
   return (
     <div className="min-h-screen lg:flex">
       <FloatingHearts />
+      <PullToRefresh />
       <Notifications />
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
@@ -79,6 +87,7 @@ export default function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/announcements" element={<Announcements />} />
+            <Route path="/event" element={<Event />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/support" element={<Support />} />
             <Route path="/thoughts" element={<Thoughts />} />
@@ -137,6 +146,38 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <Inventory />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/random-chat"
+              element={
+                <ProtectedRoute>
+                  <RandomChat />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/missions"
+              element={
+                <ProtectedRoute>
+                  <Missions />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/shop"
+              element={
+                <ProtectedRoute>
+                  <Shop />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/mystery-word"
+              element={
+                <ProtectedRoute>
+                  <MysteryWord />
                 </ProtectedRoute>
               }
             />

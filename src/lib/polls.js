@@ -30,6 +30,8 @@ export function groupPolls(rows) {
     map.get(r.poll_id).options.push({
       id: r.option_id,
       label: r.option_label,
+      image_url: r.option_image_url,
+      color: r.option_color,
       vote_count: r.vote_count,
     })
   }
@@ -37,12 +39,19 @@ export function groupPolls(rows) {
 }
 
 /**
- * Admin-only: create a poll. options is an array of strings (2+ non-empty).
+ * Admin-only: create a poll. `options` is an array of
+ * { label, imageUrl, color } — imageUrl and color are both optional
+ * (pass '' or omit them). Needs 2+ options with a non-empty label.
  */
 export async function createPoll(question, options) {
+  const payload = options.map((o) => ({
+    label: o.label,
+    image_url: o.imageUrl || null,
+    color: o.color || null,
+  }))
   const { error } = await supabase.rpc('create_poll', {
     p_question: question.trim(),
-    p_options: options,
+    p_options: payload,
   })
   if (error) throw error
 }
