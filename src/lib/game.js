@@ -136,25 +136,31 @@ export async function useSpear(itemId, targetUsername) {
 }
 
 /**
- * Send a handshake request to target user.
+ * Use a 'pettreat' item — instantly refills the caller's pet's hunger.
+ * Returns the new hunger value.
  */
-export async function sendHandshake(itemId, targetUsername) {
-  const { data, error } = await supabase.rpc('send_handshake', {
-    p_item_id: itemId,
-    p_target_username: targetUsername.trim().toLowerCase(),
-  })
+export async function usePetTreat(itemId) {
+  const { data, error } = await supabase.rpc('use_pet_treat', { p_item_id: itemId })
   if (error) throw error
   return data
 }
 
 /**
- * Accept or decline a handshake request.
+ * Use a 'pettoy' item — instantly boosts the caller's pet's happiness.
+ * Returns the new happiness value.
  */
-export async function respondHandshake(requestId, accept) {
-  const { data, error } = await supabase.rpc('respond_handshake', {
-    p_request_id: requestId,
-    p_accept: accept,
-  })
+export async function usePetToy(itemId) {
+  const { data, error } = await supabase.rpc('use_pet_toy', { p_item_id: itemId })
   if (error) throw error
   return data
+}
+
+/**
+ * Use a 'petmedicine' item — cures sickness and restores health.
+ * Returns { health, is_sick }.
+ */
+export async function usePetMedicine(itemId) {
+  const { data, error } = await supabase.rpc('use_pet_medicine', { p_item_id: itemId })
+  if (error) throw error
+  return data?.[0] ?? null
 }

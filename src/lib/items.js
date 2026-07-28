@@ -60,8 +60,23 @@ export const ITEM_INFO = {
     name: 'Handshake Offer',
     tagline: 'Send to your crush — if they accept, you BOTH gain +3 fame!',
   },
-
+pettreat: {
+  icon: '/images/items/pettreat.png',
+  name: 'Pet Treat',
+  tagline: 'Instantly refills your pet\'s hunger.',
+},
+pettoy: {
+  icon: '/images/items/pettoy.png',
+  name: 'Pet Toy',
+  tagline: 'Instantly boosts your pet\'s happiness.',
+},
+petmedicine: {
+  icon: '/images/items/petmedicine.png',
+  name: 'Pet Medicine',
+  tagline: 'Cures sickness and restores your pet\'s health.',
+},
 }
+
 
 // Alias — some files (e.g. Inventory.jsx) import this as `ITEMS`
 // rather than `ITEM_INFO`. Both names point at the same object so

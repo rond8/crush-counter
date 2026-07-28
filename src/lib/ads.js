@@ -1,11 +1,12 @@
 import { Capacitor } from '@capacitor/core'
-import { AdMob } from '@capacitor-community/admob'
+import { AdMob, BannerAdSize, BannerAdPosition, BannerAdPluginEvents } from '@capacitor-community/admob'
 import { supabase } from '../supabaseClient'
 
 // Google's official TEST ad unit IDs. Always safe to serve — used
 // whenever the remote ads_live toggle (see below) is off.
 const TEST_INTERSTITIAL_ID = 'ca-app-pub-3940256099942544/1033173712'
 const TEST_REWARDED_ID = 'ca-app-pub-3940256099942544/5224354917'
+const TEST_BANNER_ID = 'ca-app-pub-3940256099942544/6300978111'
 
 // Your real, live ad unit IDs from the AdMob dashboard (Apps ->
 // Crush Counter -> Ad units). Note this plugin doesn't support the
@@ -14,6 +15,7 @@ const TEST_REWARDED_ID = 'ca-app-pub-3940256099942544/5224354917'
 // reusing the App_Open_Splash unit for that purpose.
 const REAL_INTERSTITIAL_ID = 'ca-app-pub-3066204861051598/1525955762' // App_Open_Splash
 const REAL_REWARDED_ID = 'ca-app-pub-3066204861051598/3668335151' // y_ad
+const REAL_BANNER_ID = 'ca-app-pub-3066204861051598/4206991824' // ban
 
 // Minimum time between launch-ad shows. Launch ads only ever trigger
 // from an explicit login action (see AuthContext.signIn), never from
@@ -29,12 +31,16 @@ let adsLive = false
 let initialized = false
 let launchAdReady = false
 let lastShownAt = 0
+let bannerShown = false
 
 function launchAdUnitId() {
   return adsLive ? REAL_INTERSTITIAL_ID : TEST_INTERSTITIAL_ID
 }
 function rewardedAdUnitId() {
   return adsLive ? REAL_REWARDED_ID : TEST_REWARDED_ID
+}
+function bannerAdUnitId() {
+  return adsLive ? REAL_BANNER_ID : TEST_BANNER_ID
 }
 
 /**
@@ -138,4 +144,56 @@ export async function getAdsLive() {
 export async function setAdsLive(live) {
   const { error } = await supabase.rpc('set_ads_live', { p_live: live })
   if (error) throw error
+}
+
+/**
+ * Show a bottom banner ad. Banners are a native overlay drawn by the
+ * OS/AdMob SDK on top of the WebView — NOT part of the page's DOM —
+ * so they can visually cover fixed-position UI (like BottomTabBar)
+ * unless the app's own layout is shifted to make room. `onSizeChange`
+ * is called with the banner's height in px whenever it's known/changes,
+ * so the caller can offset its layout accordingly (see
+ * src/components/BannerAd.jsx, which does exactly this).
+ */
+export async function showBanner(onSizeChange) {
+  if (!Capacitor.isNativePlatform() || !initialized || bannerShown) return
+  try {
+    if (onSizeChange) {
+      AdMob.addListener(BannerAdPluginEvents.SizeChanged, (info) => {
+        onSizeChange(info?.height ?? 50)
+      })
+    }
+    await AdMob.showBanner({
+      adId: bannerAdUnitId(),
+      adSize: BannerAdSize.ADAPTIVE_BANNER,
+      position: BannerAdPosition.BOTTOM_CENTER,
+      margin: 0,
+      isTesting: !adsLive,
+    })
+    bannerShown = true
+  } catch {
+    bannerShown = false
+  }
+}
+
+/** Temporarily hide the banner without destroying it (cheap to re-show). */
+export async function hideBanner() {
+  if (!Capacitor.isNativePlatform() || !bannerShown) return
+  try {
+    await AdMob.hideBanner()
+  } catch {
+    // Not critical — worst case it stays visible until removeBanner().
+  }
+}
+
+/** Fully remove the banner (call on unmount). */
+export async function removeBanner() {
+  if (!Capacitor.isNativePlatform() || !bannerShown) return
+  try {
+    await AdMob.removeBanner()
+  } catch {
+    // Not critical.
+  } finally {
+    bannerShown = false
+  }
 }

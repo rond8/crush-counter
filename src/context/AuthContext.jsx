@@ -29,7 +29,7 @@ export function AuthProvider({ children }) {
     const { data, error } = await supabase
       .from('profiles')
       .select(
-        'id, username, display_name, is_admin, is_verified, avatar_url, gender, relationship_status, age, location, bio, coins, fame, leaderboard_opt_in, premium_unlocked, ad_free_spins'
+        'id, username, display_name, is_admin, avatar_url, gender, relationship_status, age, location, bio, coins, fame, leaderboard_opt_in, premium_unlocked, ad_free_spins, is_verified'
       )
       .eq('id', userId)
       .maybeSingle()
@@ -52,9 +52,7 @@ export function AuthProvider({ children }) {
     return () => listener.subscription.unsubscribe()
   }, [loadProfile])
 
-  // Keep last_seen fresh while the app is open, so other users' online
-  // indicators (for their crush / matches) stay accurate. Pauses when
-  // the tab isn't visible to avoid unnecessary writes.
+  // Keep last_seen fresh while the app is open
   useEffect(() => {
     const userId = session?.user?.id
     if (!userId) return
@@ -74,9 +72,7 @@ export function AuthProvider({ children }) {
     }
   }, [session?.user?.id])
 
-  // Claim the once-per-day coin reward whenever a session starts.
-  // No-op server-side if already claimed today, so it's safe to call
-  // on every login/app open.
+  // Claim once-per-day coin reward
   useEffect(() => {
     const userId = session?.user?.id
     if (!userId) return
@@ -90,9 +86,7 @@ export function AuthProvider({ children }) {
       .catch(() => {})
   }, [session?.user?.id])
 
-  // Notify when new (non-matched) admirers show up — checked once on
-  // session start, then periodically while the app is open, so it
-  // feels like a live notification without needing push infra.
+  // Poll for new admirers and notifications
   useEffect(() => {
     const userId = session?.user?.id
     if (!userId) return
@@ -120,10 +114,7 @@ export function AuthProvider({ children }) {
     }
   }, [session?.user?.id])
 
-  // Claim a pending referral left by Register.jsx if email
-  // confirmation meant there was no session yet at signup time. Runs
-  // once per new user id; harmless to re-run since claim_referral()
-  // is idempotent server-side.
+  // Claim pending referral
   useEffect(() => {
     const userId = session?.user?.id
     if (!userId) return
@@ -137,27 +128,42 @@ export function AuthProvider({ children }) {
     claimReferral(pending).finally(() => {
       try {
         localStorage.removeItem(PENDING_REFERRAL_STORAGE_KEY)
-      } catch {
-        // Not critical if this doesn't clear — worst case it retries
-        // harmlessly next session.
-      }
+      } catch {}
     })
   }, [session?.user?.id])
 
   const signUp = async ({ email, password, username, displayName, age }) => {
     const cleanUsername = username.trim().toLowerCase()
-    const { data, error } = await supabase.auth.signUp({ email, password })
+
+    // Pass metadata into auth signup as well so database triggers can pick it up
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          username: cleanUsername,
+          age: age ?? null,
+        },
+      },
+    })
     if (error) throw error
 
-    // If email confirmation is required, there may be no active session yet.
-    if (data.user) {
-      const { error: profileError } = await supabase.from('profiles').insert({
-        id: data.user.id,
-        username: cleanUsername,
-        display_name: displayName?.trim() || cleanUsername,
-        age: age ?? null,
-      })
-      if (profileError) throw profileError
+    // Only update profiles table if a user object was returned and session exists
+    if (data.user && data.session) {
+      const { error: profileError } = await supabase.from('profiles').upsert(
+        {
+          id: data.user.id,
+          username: cleanUsername,
+          display_name: displayName?.trim() || cleanUsername,
+          age: age ?? null,
+        },
+        { onConflict: 'id' }
+      )
+
+      // Ignore non-fatal RLS error if trigger already handled creation
+      if (profileError && !profileError.message.includes('permission denied')) {
+        throw profileError
+      }
     }
     return data
   }
@@ -166,11 +172,6 @@ export function AuthProvider({ children }) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
 
-    // Show the launch ad only on an explicit login action — not on
-    // page refresh (restored session) and not on every foreground
-    // return. Skip it for premium users. Query fresh here rather than
-    // relying on `profile` state, since that hasn't updated yet at
-    // this point in the login flow.
     const userId = data.user?.id
     if (userId) {
       const { data: prof } = await supabase
@@ -195,6 +196,10 @@ export function AuthProvider({ children }) {
     user: session?.user ?? null,
     profile,
     loading,
+    // True once we know for sure: there's an authenticated session but
+    // no matching profiles row yet (e.g. just completed Google OAuth
+    // for the first time, which never collects a username).
+    profileIncomplete: !loading && Boolean(session) && !profile,
     signUp,
     signIn,
     signOut,

@@ -1,18 +1,64 @@
-import { useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { supabase } from '../supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { calculateAge, MINIMUM_AGE } from '../lib/age'
 
 const USERNAME_RE = /^[a-z0-9_]{3,20}$/
 
 export default function CompleteProfile() {
-  const { completeOAuthProfile } = useAuth()
   const navigate = useNavigate()
+  const { user, profileIncomplete, loading, refreshProfile } = useAuth()
 
   const [username, setUsername] = useState('')
   const [birthdate, setBirthdate] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+
+  const [checking, setChecking] = useState(false)
+  const [available, setAvailable] = useState(null)
+
+  // Not logged in at all -> nothing to complete, send to login.
+  // Already has a profile -> nothing to do here, send to dashboard.
+  useEffect(() => {
+    if (loading) return
+    if (!user) {
+      navigate('/login', { replace: true })
+    } else if (!profileIncomplete) {
+      navigate('/dashboard', { replace: true })
+    }
+  }, [loading, user, profileIncomplete, navigate])
+
+  const checkAvailability = useCallback(async (candidate) => {
+    if (!USERNAME_RE.test(candidate)) {
+      setAvailable(null)
+      return
+    }
+    setChecking(true)
+    try {
+      const { data, error: checkError } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('username', candidate)
+        .maybeSingle()
+      if (checkError) throw checkError
+      setAvailable(!data)
+    } catch {
+      setAvailable(null)
+    } finally {
+      setChecking(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    const clean = username.trim().toLowerCase()
+    if (!clean) {
+      setAvailable(null)
+      return
+    }
+    const timer = setTimeout(() => checkAvailability(clean), 400)
+    return () => clearTimeout(timer)
+  }, [username, checkAvailability])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -44,14 +90,29 @@ export default function CompleteProfile() {
 
     setSubmitting(true)
     try {
-      await completeOAuthProfile({ username: cleanUsername, age })
-      navigate('/dashboard')
-    } catch (err) {
-      if (err.message?.toLowerCase().includes('duplicate') || err.code === '23505') {
-        setError('That username is already taken.')
-      } else {
-        setError(err.message || 'Could not finish setting up your account.')
+      const { error: insertError } = await supabase.from('profiles').upsert(
+        {
+          id: user.id,
+          username: cleanUsername,
+          display_name: cleanUsername,
+          age,
+        },
+        { onConflict: 'id' }
+      )
+
+      if (insertError) {
+        if (insertError.code === '23505' || insertError.message?.toLowerCase().includes('duplicate')) {
+          setError('That username is already taken.')
+        } else {
+          setError(insertError.message || 'Could not save your profile.')
+        }
+        return
       }
+
+      await refreshProfile()
+      navigate('/dashboard', { replace: true })
+    } catch (err) {
+      setError(err.message || 'Could not save your profile.')
     } finally {
       setSubmitting(false)
     }
@@ -59,19 +120,19 @@ export default function CompleteProfile() {
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-6 py-10">
-      <div className="w-full max-w-sm">
+      <div className="w-full max-w-sm card p-8">
         <div className="text-center mb-8">
-          <p className="text-4xl mb-3">👋</p>
-          <h1 className="font-display text-3xl">One last step</h1>
+          <span className="text-4xl">👋</span>
+          <h1 className="font-display text-3xl mt-4">One last step</h1>
           <p className="text-muted text-sm mt-2">
-            Pick a username — this is what people use to send you a heart.
+            Choose your username and confirm your age to finish creating your account.
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm text-muted mb-1.5" htmlFor="username">
-              Username
+              Choose username
             </label>
             <input
               id="username"
@@ -81,9 +142,20 @@ export default function CompleteProfile() {
               className="input-field font-mono"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              autoFocus
             />
+            {username.trim() && USERNAME_RE.test(username.trim().toLowerCase()) && (
+              <p className={`text-xs mt-1 ${available === false ? 'text-heart-red' : available ? 'text-heart-green' : 'text-muted'}`}>
+                {checking
+                  ? 'Checking availability…'
+                  : available === false
+                  ? `@${username.trim().toLowerCase()} is already taken`
+                  : available
+                  ? `@${username.trim().toLowerCase()} is available`
+                  : ''}
+              </p>
+            )}
           </div>
+
           <div>
             <label className="block text-sm text-muted mb-1.5" htmlFor="birthdate">
               Date of birth
@@ -92,7 +164,6 @@ export default function CompleteProfile() {
               id="birthdate"
               type="date"
               required
-              autoComplete="bday"
               className="input-field"
               value={birthdate}
               onChange={(e) => setBirthdate(e.target.value)}
@@ -102,8 +173,12 @@ export default function CompleteProfile() {
 
           {error && <p className="text-heart-red text-sm">{error}</p>}
 
-          <button type="submit" disabled={submitting} className="btn-primary w-full">
-            {submitting ? 'Finishing up…' : 'Continue'}
+          <button
+            type="submit"
+            disabled={submitting || available === false}
+            className="btn-primary w-full"
+          >
+            {submitting ? 'Saving…' : 'Complete profile 🚀'}
           </button>
         </form>
       </div>

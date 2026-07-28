@@ -3,21 +3,123 @@
 @tailwind utilities;
 
 @layer base {
-  html {
+  :root {
+    --color-midnight: #160C22;
+    --color-midnight-surface: #241635;
+    --color-midnight-border: #3A2650;
+    --color-ink: #F4E9FF;
+    --color-muted: #B6A2CE;
+    --color-heart-purple: #B57BFF;
+    --color-heart-green: #5FD68A;
+    --color-heart-red: #FF5C7A;
+    --color-heart-yellow: #FFCB57;
+  }
+
+  html.light {
+    color-scheme: light;
+  }
+
+  html.dark {
     color-scheme: dark;
+  }
+
+  html.light {
+    --color-midnight: #FFF1F6;
+    --color-midnight-surface: #FFF4F8;
+    --color-midnight-border: #FFC0D7;
+    --color-ink: #2F1225;
+    --color-muted: #7B5A6D;
+    --color-heart-purple: #D982B9;
+    --color-heart-green: #58A67D;
+    --color-heart-red: #F06B94;
+    --color-heart-yellow: #F5B4A6;
+  }
+
+  html.light body {
+    color: var(--color-ink);
+    background-image:
+      radial-gradient(circle at 18% 14%, rgba(255, 190, 215, 0.3), transparent 22%),
+      radial-gradient(circle at 78% 10%, rgba(255, 152, 194, 0.22), transparent 18%),
+      linear-gradient(180deg, #FFF7FB 0%, #FFEFF5 42%, #FCE6EC 100%);
+    background-attachment: fixed;
+  }
+
+  html.light .text-muted {
+    color: #8B6A7D;
+  }
+
+  html.light .input-field {
+    border-color: rgba(209, 148, 176, 0.45);
+    color: var(--color-ink);
+    background: #FFF5F9;
+  }
+
+  html.light .btn-ghost {
+    background: rgba(255, 255, 255, 0.9);
+  }
+
+  html.light .bg-black\/50 {
+    background-color: rgba(255, 255, 255, 0.72) !important;
+  }
+
+  html.light .bg-black\/60 {
+    background-color: rgba(255, 255, 255, 0.78) !important;
+  }
+
+  html.light .bg-black\/70 {
+    background-color: rgba(255, 255, 255, 0.86) !important;
+  }
+
+  html.light .bg-white\/10 {
+    background-color: rgba(255, 255, 255, 0.82) !important;
+  }
+
+  html.light .border-white\/10 {
+    border-color: rgba(255, 255, 255, 0.5) !important;
+  }
+
+  html.light .bg-heart-purple\/15 {
+    background-color: rgba(217, 130, 185, 0.18) !important;
+  }
+
+  html.light .bg-midnight-surface {
+    background-color: var(--color-midnight-surface) !important;
+  }
+
+  html.light .border-midnight-border\/60 {
+    border-color: rgba(255, 198, 218, 0.6) !important;
+  }
+
+  html.light .shadow-glow {
+    box-shadow: 0 18px 40px rgba(190, 125, 170, 0.08);
+  }
+
+  html.light .card {
+    box-shadow: 0 18px 40px rgba(190, 125, 170, 0.09);
+  }
+
+  html.light .btn-primary {
+    background: linear-gradient(135deg, #E17CB8, #D46AAB);
+    color: #FFF1F6;
+  }
+
+  html.light .btn-ghost {
+    background: rgba(255, 255, 255, 0.72);
+  }
+
+  html.dark body {
+    background-image: radial-gradient(circle at 20% 0%, rgba(181, 123, 255, 0.12), transparent 45%),
+      radial-gradient(circle at 85% 15%, rgba(255, 92, 122, 0.10), transparent 40%);
+  }
+
+  html {
     overflow-x: hidden;
   }
   body {
     @apply bg-midnight text-ink font-body antialiased;
     overflow-x: hidden;
-    background-image: radial-gradient(circle at 20% 0%, rgba(181, 123, 255, 0.12), transparent 45%),
-      radial-gradient(circle at 85% 15%, rgba(255, 92, 122, 0.10), transparent 40%);
     background-attachment: fixed;
-    /* Disables the native long-press behavior — the "Copy / Share /
-       Open link" popup on links and images, and the text-selection
-       magnifier — so long-pressing anywhere feels like a native app
-       instead of a web page. Re-enabled below for actual text inputs,
-       since people still need to select/edit what they type. */
+    /* Disables native long-press behavior */
     -webkit-touch-callout: none;
     -webkit-user-select: none;
     user-select: none;
@@ -51,104 +153,47 @@
       transition-colors duration-150 hover:bg-midnight-surface disabled:opacity-50 disabled:pointer-events-none;
   }
   .input-field {
-    @apply w-full bg-midnight border border-midnight-border rounded-xl px-4 py-3 text-ink placeholder:text-muted/60
-      focus:border-heart-purple/70 transition-colors;
+    @apply w-full bg-midnight border border-midnight-border rounded-xl px-4 py-3 text-ink transition-colors;
+  }
+  .input-field::placeholder {
+    color: color-mix(in srgb, var(--color-muted) 60%, transparent);
+  }
+  .input-field:focus {
+    border-color: color-mix(in srgb, var(--color-heart-purple) 70%, transparent);
   }
 
-  .shadow-glow {
-    box-shadow: 0 6px 22px rgba(181, 123, 255, 0.12), 0 2px 6px rgba(255, 92, 122, 0.06);
+  html.compact .card {
+    padding: 1rem;
+  }
+  html.compact .btn-primary,
+  html.compact .btn-ghost,
+  html.compact .input-field {
+    padding-top: 0.9rem;
+    padding-bottom: 0.9rem;
+  }
+  html.compact .space-y-4 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.75rem;
+  }
+  html.compact .grid-cols-2 > * {
+    padding: 0.75rem;
   }
 
-  .mutual-animate {
-    animation: mutualPulse 900ms ease-in-out infinite;
-    transform-origin: center;
-  }
-
-  .animate-pulseGlow {
-    animation: pulseGlow 1600ms ease-in-out infinite;
-  }
-
-  @keyframes mutualPulse {
-    0% {
-      transform: scale(1);
-      filter: drop-shadow(0 0 0 rgba(181,123,255,0));
-    }
-    50% {
-      transform: scale(1.08) rotate(-1deg);
-      filter: drop-shadow(0 8px 24px rgba(181,123,255,0.18));
-    }
-    100% {
-      transform: scale(1) rotate(0deg);
-      filter: drop-shadow(0 0 0 rgba(181,123,255,0));
-    }
-  }
-
-  @keyframes pulseGlow {
-    0% { transform: scale(1); opacity: 1; }
-    50% { transform: scale(1.03); opacity: 0.9; }
-    100% { transform: scale(1); opacity: 1; }
-  }
-
-  /* Fullscreen mutual match overlay */
-  .mutual-overlay {
-    position: fixed;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 60;
-    background: linear-gradient(180deg, rgba(24, 6, 37, 0.72), rgba(12, 7, 20, 0.86));
-    backdrop-filter: blur(6px) saturate(1.1);
-  }
-
-  .mutual-overlay__card {
-    @apply bg-midnight-surface border border-midnight-border rounded-3xl p-6 text-center max-w-md w-full;
-    transform-origin: center;
-    animation: mutualPulse 950ms ease-in-out both;
-  }
-
-  .mutual-heart {
-    font-size: 3.25rem;
-    filter: drop-shadow(0 12px 28px rgba(181,123,255,0.18));
-    animation: floatUp 2000ms ease-in-out infinite;
-  }
-
-  .mutual-overlay__hearts {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    overflow: hidden;
-  }
-
-  .mutual-overlay__hearts span {
-    position: absolute;
-    font-size: 1.75rem;
-    opacity: 0.95;
-    animation: heartRise linear infinite;
-  }
-
-  @keyframes floatUp {
-    0% { transform: translateY(0) scale(1); }
-    50% { transform: translateY(-6px) scale(1.05); }
-    100% { transform: translateY(0) scale(1); }
-  }
-
-  @keyframes heartRise {
-    0% { transform: translateY(20vh) translateX(0) scale(0.9); opacity: 0; }
-    10% { opacity: 1; }
-    100% { transform: translateY(-30vh) translateX(40vw) scale(1.1); opacity: 0; }
-  }
-
-  /*
-   * Fixes fixed-position bottom elements (like BottomTabBar) being
-   * rendered behind the Android system navigation bar once the app
-   * targets SDK 35+ (Android 15 edge-to-edge enforcement). Capacitor
-   * 8.3+ injects --safe-area-inset-bottom from Android's own system
-   * insets; env(safe-area-inset-bottom) covers iOS the same way.
-   * Apply this class to whatever element has `fixed bottom-0`.
-   */
+  /* Safe area insets for Android 15+ / Capacitor */
   .safe-area-bottom {
     padding-bottom: max(0.5rem, var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+  }
+
+  .bottom-with-banner {
+    bottom: var(--banner-height, 0px);
+  }
+
+  .pb-with-banner {
+    padding-bottom: calc(5rem + var(--banner-height, 0px));
+  }
+  @screen lg {
+    .pb-with-banner {
+      padding-bottom: 0px;
+    }
   }
 }
 

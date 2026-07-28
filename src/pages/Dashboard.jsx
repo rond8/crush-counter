@@ -6,6 +6,7 @@ import { setLeaderboardOptIn } from '../lib/leaderboard'
 import HeartCard from '../components/HeartCard'
 import UsernameSearchInput from '../components/UsernameSearchInput'
 import MutualMatchOverlay from '../components/MutualMatchOverlay'
+import PetWidget from '../components/PetWidget'
 import { isOnline } from '../lib/presence'
 import { timeAgo } from '../lib/time'
 
@@ -26,6 +27,9 @@ export default function Dashboard() {
   const [showMatchOverlay, setShowMatchOverlay] = useState(false)
   const prevMatchesRef = useRef(0)
   const [loading, setLoading] = useState(true)
+
+  // Toggle state for the Status Indicator Guide
+  const [showGuide, setShowGuide] = useState(false)
 
   const refresh = useCallback(async () => {
     const [crush, admirerStatus, matchList] = await Promise.all([
@@ -71,7 +75,6 @@ export default function Dashboard() {
 
     setSending(true)
     try {
-      // allow the mutual overlay to show again for this new crush action
       try {
         localStorage.setItem('mutualMatchShownCount', '0')
       } catch (e) {}
@@ -95,91 +98,121 @@ export default function Dashboard() {
     setEditing(true)
   }
 
+  // Helper function to dynamically set the heart color based on crush status
+  const getCrushHeartEmoji = (status) => {
+    switch (status) {
+      case 'mutual': return '💜'
+      case 'competition': return '💚'
+      case 'pending': return '💛'
+      default: return '❤️'
+    }
+  }
+
   const showForm = !loading && (editing || !myCrush)
 
   return (
-    <div className="max-w-2xl mx-auto px-6 py-10 space-y-10">
-      {/* Hero */}
-      <section className="text-center space-y-2">
-        <h1 className="font-display text-3xl md:text-4xl">
+    <div className="max-w-2xl mx-auto px-6 py-10 space-y-8">
+      {/* Hero Header */}
+      <section className="text-center space-y-3">
+        <h1 className="font-display text-3xl md:text-4xl font-bold tracking-tight">
           Send a heart, <span className="text-heart-purple">stay anonymous</span>
         </h1>
-        <p className="text-muted text-sm max-w-md mx-auto">
-          They won’t know it’s you — unless they’ve sent one to you too. You can only have
-          one crush at a time, but you can change it whenever you like.
+        <p className="text-muted text-sm max-w-md mx-auto leading-relaxed">
+          They won’t know it’s you unless they’ve sent one back. You can only have one active crush at a time, but you can update it whenever you like.
         </p>
       </section>
 
-      {/* Current crush / change form */}
+      {/* Primary Action Card: Form or Selected Crush Display */}
       {loading ? (
-        <p className="text-muted text-sm font-mono text-center">loading…</p>
+        <div className="card p-8 text-center space-y-3">
+          <div className="w-6 h-6 border-2 border-heart-purple border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-muted text-xs font-mono uppercase tracking-wider">Loading your profile data...</p>
+        </div>
       ) : showForm ? (
-        <form onSubmit={handleSend} className="card p-5 flex flex-col sm:flex-row gap-3">
-          <div className="flex-1">
-            <label htmlFor="target" className="sr-only">
-              Their username
-            </label>
-            <UsernameSearchInput
-              value={targetUsername}
-              onChange={setTargetUsername}
-              excludeUsername={profile?.username}
-              autoFocus={editing}
-            />
-          </div>
-          <div className="flex gap-2">
-            {editing && (
+        <form onSubmit={handleSend} className="card p-5 space-y-4">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex-1">
+              <label htmlFor="target" className="sr-only">
+                Their username
+              </label>
+              <UsernameSearchInput
+                value={targetUsername}
+                onChange={setTargetUsername}
+                excludeUsername={profile?.username}
+                autoFocus={editing}
+              />
+            </div>
+            <div className="flex gap-2">
+              {editing && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditing(false)
+                    setFormError('')
+                  }}
+                  className="btn-ghost !px-4"
+                >
+                  Cancel
+                </button>
+              )}
               <button
-                type="button"
-                onClick={() => {
-                  setEditing(false)
-                  setFormError('')
-                }}
-                className="btn-ghost"
+                type="submit"
+                disabled={sending || !targetUsername.trim()}
+                className="btn-primary flex items-center justify-center gap-2 whitespace-nowrap shadow-lg shadow-heart-purple/20"
               >
-                Cancel
+                <span>💌 {sending ? 'Sending…' : myCrush ? 'Update Crush' : 'Send Heart'}</span>
               </button>
-            )}
-            <button
-              type="submit"
-              disabled={sending || !targetUsername.trim()}
-              className="btn-primary whitespace-nowrap"
-            >
-              {sending ? 'Sending…' : myCrush ? '💌 Update' : '💌 Send heart'}
-            </button>
+            </div>
           </div>
         </form>
       ) : (
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-display text-xl">Your crush</h2>
-            <button onClick={startEditing} className="btn-ghost !px-4 !py-2 text-sm">
-              Change
+        <section className="space-y-3">
+          <div className="flex items-center justify-between px-1">
+            <h2 className="font-display text-lg font-semibold flex items-center gap-2">
+              {/* Dynamically render the heart based on the status */}
+              <span>{getCrushHeartEmoji(myCrush.status)} Your Active Crush</span>
+            </h2>
+            <button onClick={startEditing} className="btn-ghost !px-3 !py-1.5 text-xs font-semibold">
+              Change Selection
             </button>
           </div>
           <HeartCard
             username={myCrush.target_username}
             status={myCrush.status}
             lastSeen={myCrush.target_last_seen}
+            avatarUrl={myCrush.target_avatar_url}
           />
         </section>
       )}
-      {formError && <p className="text-heart-red text-sm text-center">{formError}</p>}
-      {formSuccess && <p className="text-heart-green text-sm text-center">{formSuccess}</p>}
 
-      {/* Leaderboard opt-in prompt — asked once, on first visit */}
+      {/* Notifications / Alerts */}
+      {formError && (
+        <div className="p-3 rounded-xl bg-heart-red/10 border border-heart-red/30 text-heart-red text-sm text-center font-medium">
+          {formError}
+        </div>
+      )}
+      {formSuccess && (
+        <div className="p-3 rounded-xl bg-heart-green/10 border border-heart-green/30 text-heart-green text-sm text-center font-medium">
+          {formSuccess}
+        </div>
+      )}
+
+      {/* Virtual pet */}
+      <PetWidget />
+
+      {/* Leaderboard Opt-In Prompt */}
       {profile?.leaderboard_opt_in === null && (
-        <div className="card p-5 flex flex-col sm:flex-row sm:items-center gap-4">
-          <span className="text-3xl" aria-hidden="true">
+        <div className="card p-5 flex flex-col sm:flex-row sm:items-center gap-4 border-l-4 border-l-heart-purple">
+          <div className="text-3xl shrink-0 self-start sm:self-auto" aria-hidden="true">
             🏆
-          </span>
-          <div className="flex-1">
-            <p className="font-semibold text-ink">Want a shot at the leaderboard?</p>
-            <p className="text-sm text-muted">
-              If you're ever in the top 10 by fame, do you want your profile shown on the{' '}
-              <span className="text-ink">Featured</span> page?
+          </div>
+          <div className="flex-1 space-y-0.5">
+            <p className="font-semibold text-ink text-sm">Join the Featured Leaderboard?</p>
+            <p className="text-xs text-muted leading-relaxed">
+              If your profile ranks in the top 10 by fame, opt in to display your username on the <span className="text-ink font-medium">Featured</span> page.
             </p>
           </div>
-          <div className="flex gap-2 shrink-0">
+          <div className="flex gap-2 shrink-0 pt-2 sm:pt-0">
             <button
               disabled={optInSaving}
               onClick={async () => {
@@ -188,9 +221,9 @@ export default function Dashboard() {
                 await refreshProfile()
                 setOptInSaving(false)
               }}
-              className="btn-primary !px-4 !py-2 text-sm"
+              className="btn-primary !px-4 !py-2 text-xs"
             >
-              Yes
+              Opt In
             </button>
             <button
               disabled={optInSaving}
@@ -200,7 +233,7 @@ export default function Dashboard() {
                 await refreshProfile()
                 setOptInSaving(false)
               }}
-              className="btn-ghost !px-4 !py-2 text-sm"
+              className="btn-ghost !px-4 !py-2 text-xs"
             >
               No thanks
             </button>
@@ -208,44 +241,60 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Secret admirer banner */}
+      {/* Secret Admirer Banner */}
       {admirer.has_admirer && (
-        <div className="card p-5 flex items-center gap-4 ring-1 ring-heart-red/40">
-          <span className="text-3xl animate-pulseGlow" aria-hidden="true">
+        <div className="card p-5 flex items-center gap-4 bg-heart-red/5 border border-heart-red/30 shadow-sm">
+          <span className="text-3xl animate-pulse" aria-hidden="true">
             ❤️
           </span>
-          <div>
-            <p className="font-semibold text-heart-red">
+          <div className="space-y-0.5">
+            <p className="font-semibold text-heart-red text-sm">
               {admirer.admirer_count === 1
-                ? 'You have a secret admirer'
+                ? 'You have 1 secret admirer'
                 : `You have ${admirer.admirer_count} secret admirers`}
             </p>
-            <p className="text-sm text-muted">
-              Someone has you as their crush. Send one back to find out if it’s them.
+            <p className="text-xs text-muted leading-relaxed">
+              Someone has picked you as their crush. Send a heart back to find out if it’s a mutual match.
             </p>
           </div>
         </div>
       )}
 
-      {/* Mutual matches - identity only ever revealed here */}
+      {/* Mutual Matches Section */}
       {matches.length > 0 && (
-        <section>
-          <h2 className="font-display text-xl mb-3 text-heart-purple">💜 Your matches</h2>
-          <div className="space-y-3">
+        <section className="space-y-3">
+          <h2 className="font-display text-lg font-semibold text-heart-purple flex items-center gap-2">
+            <span>💜 Mutual Matches</span>
+          </h2>
+          <div className="space-y-2">
             {matches.map((m) => (
-              <div key={m.username} className="card ring-1 ring-heart-purple/50 shadow-glow p-4 flex items-center gap-3">
-                <span className="text-2xl animate-pulseGlow">💜</span>
-                <Link to={`/u/${m.username}`} className="font-mono text-ink hover:underline">
-                  @{m.username}
-                </Link>
-                <span className="flex items-center gap-1 text-xs text-muted ml-auto">
+              <div
+                key={m.username}
+                className="card p-4 flex items-center justify-between border-midnight-border/80 hover:border-heart-purple/50 transition-colors shadow-sm"
+              >
+                <div className="flex items-center gap-3">
+                  {m.avatar_url ? (
+                    <img
+                      src={m.avatar_url}
+                      alt={m.username}
+                      className="w-9 h-9 rounded-full object-cover ring-2 ring-heart-purple/50"
+                    />
+                  ) : (
+                    <span className="text-2xl animate-pulse">💜</span>
+                  )}
+                  <Link to={`/u/${m.username}`} className="font-mono text-sm font-semibold text-ink hover:text-heart-purple transition-colors">
+                    @{m.username}
+                  </Link>
+                </div>
+
+                <span className="flex items-center gap-1.5 text-xs text-muted">
                   <span
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      isOnline(m.last_seen) ? 'bg-heart-green' : 'bg-midnight-border'
+                    className={`w-2 h-2 rounded-full ${
+                      isOnline(m.last_seen) ? 'bg-heart-green shadow-[0_0_6px_rgba(34,197,94,0.6)]' : 'bg-midnight-border'
                     }`}
                     aria-hidden="true"
                   />
-                  {isOnline(m.last_seen) ? 'Online now' : m.last_seen ? `Active ${timeAgo(m.last_seen)}` : 'Offline'}
+                  {isOnline(m.last_seen) ? 'Online' : m.last_seen ? `Active ${timeAgo(m.last_seen)}` : 'Offline'}
                 </span>
               </div>
             ))}
@@ -253,19 +302,52 @@ export default function Dashboard() {
         </section>
       )}
 
+      {/* Mutual Match Pop-up Overlay */}
       {showMatchOverlay && (
-        <MutualMatchOverlay matches={matches} onClose={() => setShowMatchOverlay(false)} />
+        <MutualMatchOverlay
+          matches={matches}
+          myCrush={myCrush}
+          onClose={() => setShowMatchOverlay(false)}
+        />
       )}
 
-      {/* Legend */}
-      <section className="card p-5">
-        <h3 className="text-sm font-semibold text-muted mb-3 uppercase tracking-wide">What the colors mean</h3>
-        <ul className="space-y-2 text-sm">
-          <li>💜 <span className="text-muted">Mutual match — you like them, and they like you back.</span></li>
-          <li>💚 <span className="text-muted">Competition — someone else has also sent a heart to your crush.</span></li>
-          <li>❤️ <span className="text-muted">Secret admirer — someone has sent a heart to you.</span></li>
-          <li>💛 <span className="text-muted">Invite needed — that username isn’t on Crush Counter yet.</span></li>
-        </ul>
+      {/* Collapsible Status Indicator Guide */}
+      <section className="card p-4 space-y-3 bg-midnight/30 transition-all duration-200">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold text-muted uppercase tracking-widest">
+            Status Indicator Guide
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowGuide(!showGuide)}
+            className="w-7 h-7 rounded-full bg-midnight-border/50 hover:bg-heart-purple/20 text-muted hover:text-heart-purple font-mono font-bold text-xs flex items-center justify-center transition-colors"
+            title="Toggle Status Guide"
+            aria-label="Toggle status guide details"
+          >
+            ?
+          </button>
+        </div>
+
+        {showGuide && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-2 border-t border-midnight-border/50">
+            <div className="flex items-start gap-2.5">
+              <span className="text-base leading-none">💜</span>
+              <p className="text-muted"><strong className="text-ink">Mutual Match:</strong> You and this user have both chosen each other.</p>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <span className="text-base leading-none">💚</span>
+              <p className="text-muted"><strong className="text-ink">Competition:</strong> Multiple users have chosen this same crush.</p>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <span className="text-base leading-none">❤️</span>
+              <p className="text-muted"><strong className="text-ink">Secret Admirer:</strong> Someone has set you as their active crush.</p>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <span className="text-base leading-none">💛</span>
+              <p className="text-muted"><strong className="text-ink">Pending Invite:</strong> Target username is not registered on the app yet.</p>
+            </div>
+          </div>
+        )}
       </section>
     </div>
   )

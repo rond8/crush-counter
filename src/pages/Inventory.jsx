@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { getMyInventory, useFire, useLighter, useSword } from '../lib/game'
+import { getMyInventory, useFire, useLighter, useSword, usePetTreat, usePetToy, usePetMedicine } from '../lib/game'
 import { ITEMS } from '../lib/items'
 import UsernameSearchInput from '../components/UsernameSearchInput'
 
@@ -10,6 +10,7 @@ const TABS = [
   { key: 'offensive', label: 'Offensive', types: ['arrow', 'magnet'] },
   { key: 'defensive', label: 'Defensive', types: ['shield', 'mirror'] },
   { key: 'consumables', label: 'Consumables', types: ['fire', 'clover', 'star'] },
+  { key: 'petcare', label: 'Pet care', types: ['pettreat', 'pettoy', 'petmedicine'] },
 ]
 
 const RARITY_ORDER = {
@@ -22,8 +23,10 @@ const RARITY_ORDER = {
   clover: 1,
   mirror: 4,
   spear: 5,
-  handshake: 4,
   lighter: 2,
+  pettreat: 1,
+  pettoy: 1,
+  petmedicine: 3,
 }
 
 function groupByType(items) {
@@ -47,9 +50,34 @@ export default function Inventory() {
 
   const [giftingType, setGiftingType] = useState(null)
   const [giftTarget, setGiftTarget] = useState('')
-  const [actionError, setActionError] = useState('')
-  const [actionSuccess, setActionSuccess] = useState('')
   const [actingType, setActingType] = useState(null)
+
+  // Dialog State for Notice Messages
+  const [dialogNotice, setDialogNotice] = useState({
+    isOpen: false,
+    type: 'success', // 'success' | 'error'
+    message: '',
+  })
+
+  const closeDialog = () => {
+    setDialogNotice((prev) => ({ ...prev, isOpen: false }))
+  }
+
+  const showSuccess = (msg) => {
+    setDialogNotice({
+      isOpen: true,
+      type: 'success',
+      message: msg,
+    })
+  }
+
+  const showError = (msg) => {
+    setDialogNotice({
+      isOpen: true,
+      type: 'error',
+      message: msg,
+    })
+  }
 
   const refresh = useCallback(async () => {
     const items = await getMyInventory()
@@ -61,48 +89,84 @@ export default function Inventory() {
   }, [refresh])
 
   const handleUseFire = async (itemId) => {
-    setActionError('')
-    setActionSuccess('')
     setActingType('fire')
     try {
       await useFire(itemId)
-      setActionSuccess('🔥 Fame +5!')
+      showSuccess('🔥 Fame +5!')
       await Promise.all([refreshProfile(), refresh()])
     } catch (err) {
-      setActionError(err.message || 'Could not use that item.')
+      showError(err.message || 'Could not use that item.')
     } finally {
       setActingType(null)
     }
   }
 
   const handleUseSword = async (itemId) => {
-    setActionError('')
-    setActionSuccess('')
     setActingType('sword')
     try {
       await useSword(itemId)
-      setActionSuccess('⚔️ Your messages to your crush are priority for the next 24h.')
+      showSuccess('⚔️ Your messages to your crush are priority for the next 24h.')
       await refresh()
     } catch (err) {
-      setActionError(err.message || 'Could not use that item.')
+      showError(err.message || 'Could not use that item.')
     } finally {
       setActingType(null)
     }
   }
 
   const handleUseLighter = async (itemId) => {
-    setActionError('')
-    setActionSuccess('')
-    if (!giftTarget.trim()) return
+    if (!giftTarget.trim()) {
+      showError('Please enter a target username.')
+      return
+    }
     setActingType('lighter')
     try {
       await useLighter(itemId, giftTarget)
-      setActionSuccess(`🕯️ Gifted +5 fame to @${giftTarget.trim().toLowerCase()}.`)
+      showSuccess(`🕯️ Gifted +5 fame to @${giftTarget.trim().toLowerCase()}.`)
       setGiftingType(null)
       setGiftTarget('')
       await refresh()
     } catch (err) {
-      setActionError(err.message || 'Could not gift that item.')
+      showError(err.message || 'Could not gift that item.')
+    } finally {
+      setActingType(null)
+    }
+  }
+
+  const handleUsePetTreat = async (itemId) => {
+    setActingType('pettreat')
+    try {
+      await usePetTreat(itemId)
+      showSuccess("🍖 Your pet's hunger is refilled!")
+      await refresh()
+    } catch (err) {
+      showError(err.message || 'Could not use that item.')
+    } finally {
+      setActingType(null)
+    }
+  }
+
+  const handleUsePetToy = async (itemId) => {
+    setActingType('pettoy')
+    try {
+      await usePetToy(itemId)
+      showSuccess('🎾 Your pet is delighted!')
+      await refresh()
+    } catch (err) {
+      showError(err.message || 'Could not use that item.')
+    } finally {
+      setActingType(null)
+    }
+  }
+
+  const handleUsePetMedicine = async (itemId) => {
+    setActingType('petmedicine')
+    try {
+      await usePetMedicine(itemId)
+      showSuccess('💊 Your pet is healed!')
+      await refresh()
+    } catch (err) {
+      showError(err.message || 'Could not use that item.')
     } finally {
       setActingType(null)
     }
@@ -129,15 +193,45 @@ export default function Inventory() {
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-10 space-y-8">
+      {/* Centered Notification Dialog Overlay */}
+      {dialogNotice.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="card max-w-sm w-full p-6 text-center space-y-4 shadow-2xl border border-white/10 bg-midnight/95">
+            <div className="flex justify-center">
+              {dialogNotice.type === 'error' ? (
+                <div className="w-12 h-12 rounded-full bg-heart-red/20 text-heart-red flex items-center justify-center text-2xl font-bold">
+                  ⚠️
+                </div>
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-heart-green/20 text-heart-green flex items-center justify-center text-2xl font-bold">
+                  ✨
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-lg font-display text-ink">
+                {dialogNotice.type === 'error' ? 'Action Failed' : 'Success!'}
+              </h3>
+              <p className="text-sm text-muted">{dialogNotice.message}</p>
+            </div>
+
+            <button
+              onClick={closeDialog}
+              className="btn-primary w-full !py-2.5 text-sm font-semibold"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       <section className="text-center space-y-2">
         <h1 className="font-display text-3xl md:text-4xl">🎒 Inventory</h1>
         <p className="text-muted text-sm max-w-md mx-auto">
           Your collected items are grouped by type and shown with quantities so it’s easier to browse.
         </p>
       </section>
-
-      {actionError && <p className="text-heart-red text-sm text-center">{actionError}</p>}
-      {actionSuccess && <p className="text-heart-green text-sm text-center">{actionSuccess}</p>}
 
       <div className="card p-4 space-y-3">
         <input
@@ -210,16 +304,17 @@ export default function Inventory() {
                       onClick={() => {
                         if (type === 'fire') handleUseFire(items[0].id)
                         else if (type === 'sword') handleUseSword(items[0].id)
+                        else if (type === 'pettreat') handleUsePetTreat(items[0].id)
+                        else if (type === 'pettoy') handleUsePetToy(items[0].id)
+                        else if (type === 'petmedicine') handleUsePetMedicine(items[0].id)
                         else {
                           setGiftingType(type)
-                          setActionError('')
-                          setActionSuccess('')
                         }
                       }}
                       disabled={isActing}
                       className="btn-ghost !px-4 !py-2 text-sm whitespace-nowrap"
                     >
-                      {isActing ? 'Using…' : type === 'fire' || type === 'sword' ? 'Use' : 'Use'}
+                      {isActing ? 'Using…' : 'Use'}
                     </button>
                   )}
                 </div>
@@ -237,7 +332,7 @@ export default function Inventory() {
                       <button
                         onClick={() => handleUseLighter(items[0].id)}
                         disabled={isActing || !giftTarget.trim()}
-                        className="btn-primary !px-4 !py-2 text-sm whitespace-nowrap"
+                        className="btn-primary !px-4 !py-2 text-sm whitespace-nowrap disabled:opacity-50"
                       >
                         {isActing ? 'Gifting…' : 'Gift'}
                       </button>

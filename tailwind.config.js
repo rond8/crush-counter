@@ -5,17 +5,17 @@ export default {
     extend: {
       colors: {
         midnight: {
-          DEFAULT: '#160C22',
-          surface: '#241635',
-          border: '#3A2650',
+          DEFAULT: 'var(--color-midnight)',
+          surface: 'var(--color-midnight-surface)',
+          border: 'var(--color-midnight-border)',
         },
-        ink: '#F4E9FF',
-        muted: '#B6A2CE',
+        ink: 'var(--color-ink)',
+        muted: 'var(--color-muted)',
         heart: {
-          purple: '#B57BFF',
-          green: '#5FD68A',
-          red: '#FF5C7A',
-          yellow: '#FFCB57',
+          purple: 'var(--color-heart-purple)',
+          green: 'var(--color-heart-green)',
+          red: 'var(--color-heart-red)',
+          yellow: 'var(--color-heart-yellow)',
         },
       },
       fontFamily: {

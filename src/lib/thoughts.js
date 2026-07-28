@@ -34,6 +34,9 @@ export async function setThought(body) {
   if (error) throw error
 }
 
+/**
+ * Delete the caller's active thought.
+ */
 export async function deleteMyThought() {
   const { error } = await supabase.rpc('delete_my_thought')
   if (error) throw error
@@ -44,5 +47,35 @@ export async function deleteMyThought() {
  */
 export async function likeThought(thoughtId) {
   const { error } = await supabase.rpc('like_thought', { p_thought_id: thoughtId })
+  if (error) throw error
+}
+
+/**
+ * Fetch comments for a specific thought.
+ */
+export async function getThoughtComments(thoughtId) {
+  const { data, error } = await supabase.rpc('get_thought_comments', { p_thought_id: thoughtId })
+  if (error) throw error
+  return data ?? []
+}
+
+/**
+ * Post a comment on a thought.
+ */
+export async function addThoughtComment(thoughtId, body) {
+  const { error } = await supabase.rpc('add_thought_comment', {
+    p_thought_id: thoughtId,
+    p_body: body,
+  })
+  if (error) throw error
+}
+
+/**
+ * Delete your own comment from a thought.
+ */
+export async function deleteThoughtComment(commentId) {
+  const { error } = await supabase.rpc('delete_thought_comment', {
+    p_comment_id: commentId,
+  })
   if (error) throw error
 }

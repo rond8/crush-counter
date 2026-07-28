@@ -41,13 +41,14 @@ export async function sendPersonalNotification(targetUsername, title, body) {
 }
 
 /**
- * Admin-only: post an announcement. Any @username mentions in the
- * body that match real accounts get notified automatically.
+ * Admin-only: post an announcement AND notify all users automatically.
  */
-export async function postAnnouncement(title, body) {
+export async function postAnnouncement(title, body, imageUrl = null, linkUrl = null) {
   const { error } = await supabase.rpc('post_announcement', {
     p_title: title.trim(),
     p_body: body.trim(),
+    p_image_url: imageUrl,
+    p_link_url: linkUrl,
   })
   if (error) throw error
 }

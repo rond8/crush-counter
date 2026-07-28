@@ -37,7 +37,9 @@ export default function NotificationsPage() {
 
   const handleClick = async (n) => {
     if (!n.read_at) {
-      setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, read_at: new Date().toISOString() } : x)))
+      setNotifications((prev) =>
+        prev.map((x) => (x.id === n.id ? { ...x, read_at: new Date().toISOString() } : x))
+      )
       markNotificationRead(n.id)
         .then(refreshUnreadCount)
         .catch(() => {})
@@ -46,7 +48,9 @@ export default function NotificationsPage() {
   }
 
   const handleMarkAllRead = async () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read_at: n.read_at ?? new Date().toISOString() })))
+    setNotifications((prev) =>
+      prev.map((n) => ({ ...n, read_at: n.read_at ?? new Date().toISOString() }))
+    )
     try {
       await markAllNotificationsRead()
       await refreshUnreadCount()
@@ -66,7 +70,10 @@ export default function NotificationsPage() {
 
       {hasUnread && (
         <div className="text-right">
-          <button onClick={handleMarkAllRead} className="text-xs text-muted hover:text-ink transition-colors">
+          <button
+            onClick={handleMarkAllRead}
+            className="text-xs text-muted hover:text-ink transition-colors"
+          >
             Mark all as read
           </button>
         </div>
@@ -83,7 +90,10 @@ export default function NotificationsPage() {
       ) : (
         <div className="space-y-3">
           {notifications.map((n) => {
-            const config = TYPE_CONFIG[n.type] ?? { icon: '🔔', accent: 'ring-midnight-border' }
+            const config = TYPE_CONFIG[n.type] ?? {
+              icon: '🔔',
+              accent: 'ring-midnight-border',
+            }
             const isUnread = !n.read_at
             return (
               <button
@@ -91,16 +101,30 @@ export default function NotificationsPage() {
                 onClick={() => handleClick(n)}
                 className={`w-full text-left card p-4 flex items-start gap-3 ring-1 transition-shadow ${
                   isUnread ? config.accent : 'ring-midnight-border'
-                } ${n.link ? 'hover:ring-heart-purple/40 cursor-pointer' : 'cursor-default'}`}
+                } ${
+                  n.link
+                    ? 'hover:ring-heart-purple/40 cursor-pointer'
+                    : 'cursor-default'
+                }`}
               >
                 <span className="text-2xl leading-none">{config.icon}</span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline justify-between gap-3">
-                    <p className={`text-sm ${isUnread ? 'font-semibold text-ink' : 'text-muted'}`}>{n.title}</p>
-                    {isUnread && <span className="w-2 h-2 rounded-full bg-heart-purple shrink-0" />}
+                    <p
+                      className={`text-sm ${
+                        isUnread ? 'font-semibold text-ink' : 'text-muted'
+                      }`}
+                    >
+                      {n.title}
+                    </p>
+                    {isUnread && (
+                      <span className="w-2 h-2 rounded-full bg-heart-purple shrink-0" />
+                    )}
                   </div>
                   {n.body && <p className="text-sm text-muted mt-1">{n.body}</p>}
-                  <p className="text-xs text-muted font-mono mt-1">{timeAgo(n.created_at)}</p>
+                  <p className="text-xs text-muted font-mono mt-1">
+                    {timeAgo(n.created_at)}
+                  </p>
                 </div>
               </button>
             )

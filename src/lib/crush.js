@@ -71,3 +71,12 @@ export async function getMatches() {
   if (error) throw error
   return data ?? []
 }
+
+/**
+ * Gets timestamps for when admirers set the current user as their crush.
+ */
+export async function getAdmirerDates() {
+  const { data, error } = await supabase.rpc('get_my_admirer_dates')
+  if (error) throw error
+  return data ?? []
+}

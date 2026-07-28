@@ -13,11 +13,15 @@ export default function Announcements() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
 
+  // Announcement Form State
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
+  const [imageUrl, setImageUrl] = useState('')
+  const [linkUrl, setLinkUrl] = useState('')
   const [posting, setPosting] = useState(false)
   const [postError, setPostError] = useState('')
 
+  // Direct Message Form State
   const [dmTarget, setDmTarget] = useState('')
   const [dmTitle, setDmTitle] = useState('')
   const [dmBody, setDmBody] = useState('')
@@ -29,7 +33,7 @@ export default function Announcements() {
     setLoadError('')
     const { data, error } = await supabase
       .from('announcements')
-      .select('id, title, body, created_at')
+      .select('id, title, body, image_url, link_url, created_at')
       .order('created_at', { ascending: false })
     if (error) setLoadError(error.message)
     else setAnnouncements(data ?? [])
@@ -46,14 +50,35 @@ export default function Announcements() {
 
     setPosting(true)
     try {
-      await postAnnouncement(title, body)
+      await postAnnouncement(
+        title,
+        body,
+        imageUrl.trim() || null,
+        linkUrl.trim() || null
+      )
+
       setTitle('')
       setBody('')
+      setImageUrl('')
+      setLinkUrl('')
       await load()
     } catch (err) {
       setPostError(err.message || 'Could not post announcement.')
     } finally {
       setPosting(false)
+    }
+  }
+
+  const handleDelete = async (id) => {
+    if (!confirm('Are you sure you want to delete this announcement?')) return
+
+    try {
+      const { error } = await supabase.from('announcements').delete().eq('id', id)
+      if (error) throw error
+
+      setAnnouncements((prev) => prev.filter((item) => item.id !== id))
+    } catch (err) {
+      alert(`Could not delete announcement: ${err.message}`)
     }
   }
 
@@ -77,11 +102,17 @@ export default function Announcements() {
     }
   }
 
+  const handleCardClick = (a) => {
+    if (a.link_url) {
+      window.open(a.link_url, '_blank', 'noopener,noreferrer')
+    }
+  }
+
   return (
     <div className="max-w-2xl mx-auto px-6 py-10 space-y-8">
       <section className="text-center space-y-2">
         <h1 className="font-display text-3xl md:text-4xl">📣 Announcements</h1>
-        <p className="text-muted text-sm">Updates from the Crush Counter team.</p>
+        <p className="text-muted text-sm">Updates from the team.</p>
       </section>
 
       {isAdmin && (
@@ -104,6 +135,37 @@ export default function Announcements() {
               value={body}
               onChange={(e) => setBody(e.target.value)}
             />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <input
+                type="url"
+                placeholder="Image URL (optional)"
+                className="input-field text-sm"
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+              />
+              <input
+                type="url"
+                placeholder="Link URL e.g. https://... (optional)"
+                className="input-field text-sm"
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+              />
+            </div>
+
+            {imageUrl && (
+              <div className="mt-2 rounded-lg overflow-hidden border border-slate-700 max-h-48 flex justify-center bg-slate-900">
+                <img
+                  src={imageUrl}
+                  alt="Preview"
+                  className="object-cover h-full max-h-48 w-full"
+                  onError={(e) => {
+                    e.target.style.display = 'none'
+                  }}
+                />
+              </div>
+            )}
+
             {postError && <p className="text-heart-red text-sm">{postError}</p>}
             <button
               type="submit"
@@ -155,14 +217,46 @@ export default function Announcements() {
       ) : (
         <div className="space-y-4">
           {announcements.map((a) => (
-            <article key={a.id} className="card p-5">
+            <article
+              key={a.id}
+              onClick={() => handleCardClick(a)}
+              className={`card p-5 space-y-3 relative transition-shadow ${
+                a.link_url ? 'cursor-pointer hover:ring-1 hover:ring-heart-purple/40' : ''
+              }`}
+            >
               <div className="flex items-baseline justify-between gap-4">
                 <h3 className="font-display text-lg">{a.title}</h3>
-                <span className="text-xs text-muted font-mono whitespace-nowrap">
-                  {timeAgo(a.created_at)}
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-muted font-mono whitespace-nowrap">
+                    {timeAgo(a.created_at)}
+                  </span>
+
+                  {isAdmin && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDelete(a.id)
+                      }}
+                      className="text-xs text-heart-red hover:underline font-medium"
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
               </div>
-              <p className="text-sm text-muted mt-2 whitespace-pre-wrap">{a.body}</p>
+
+              {a.image_url && (
+                <div className="rounded-lg overflow-hidden border border-slate-800 bg-slate-900">
+                  <img
+                    src={a.image_url}
+                    alt={a.title}
+                    className="w-full h-auto max-h-96 object-cover"
+                    loading="lazy"
+                  />
+                </div>
+              )}
+
+              <p className="text-sm text-muted whitespace-pre-wrap">{a.body}</p>
             </article>
           ))}
         </div>

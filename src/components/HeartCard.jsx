@@ -2,13 +2,9 @@ import { Link } from 'react-router-dom'
 import { isOnline } from '../lib/presence'
 import { timeAgo } from '../lib/time'
 
-// Drop your own image files at these paths under the project's
-// public/ folder (e.g. public/images/hearts/purple.png) — Vite
-// serves anything in public/ directly at the matching URL, no import
-// needed. Any image format works (png, svg, webp, etc.) as long as
-// the filename/extension matches what's listed below.
 const STATUS_CONFIG = {
-  purple: {
+  // Alias 'mutual' to your purple heart configuration
+  mutual: {
     icon: '/images/hearts/purple.png',
     label: 'Mutual match',
     detail: 'You like them, and they like you back.',
@@ -16,7 +12,8 @@ const STATUS_CONFIG = {
     glow: 'shadow-glow',
     text: 'text-heart-purple',
   },
-  green: {
+  // Alias 'competition' to your green heart configuration
+  competition: {
     icon: '/images/hearts/green.png',
     label: 'Competition',
     detail: 'Someone else has also sent a heart to your crush.',
@@ -24,6 +21,7 @@ const STATUS_CONFIG = {
     glow: '',
     text: 'text-heart-green',
   },
+  // Alias 'yellow' / 'pending_invite' for unregistered users
   yellow: {
     icon: '/images/hearts/yellow.png',
     label: 'Invite needed',
@@ -43,9 +41,16 @@ const STATUS_CONFIG = {
 }
 
 export default function HeartCard({ username, status, lastSeen }) {
-  const config = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending
+  // Gracefully handle color names or status strings (e.g., 'purple' vs 'mutual')
+  const statusKey = 
+    status === 'purple' ? 'mutual' :
+    status === 'green' ? 'competition' :
+    status;
+
+  const config = STATUS_CONFIG[statusKey] ?? STATUS_CONFIG.pending
+  
   // Online status only makes sense once the account actually exists.
-  const showPresence = status !== 'yellow'
+  const showPresence = statusKey !== 'yellow'
   const online = isOnline(lastSeen)
 
   return (
@@ -53,7 +58,7 @@ export default function HeartCard({ username, status, lastSeen }) {
       <img
         src={config.icon}
         alt={config.label}
-        className={`w-9 h-9 shrink-0 ${status === 'purple' ? 'mutual-animate' : ''}`}
+        className={`w-9 h-9 shrink-0 ${statusKey === 'mutual' ? 'mutual-animate' : ''}`}
       />
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2 flex-wrap">

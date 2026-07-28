@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useTheme } from '../context/ThemeContext.jsx'
 import { updatePassword, updateEmail, deleteMyAccount } from '../lib/account'
 import { getAdsLive, setAdsLive } from '../lib/ads'
 
@@ -29,6 +30,10 @@ export default function Settings() {
   const [loadingAds, setLoadingAds] = useState(isAdmin)
   const [togglingAds, setTogglingAds] = useState(false)
   const [adsError, setAdsError] = useState('')
+
+  const { theme, toggleTheme, preferences, setPreference, resetPreferences } = useTheme()
+
+  const handlePreferenceToggle = (key) => setPreference(key, !preferences[key])
 
   useEffect(() => {
     if (!isAdmin) return
@@ -112,6 +117,93 @@ export default function Settings() {
       <section className="text-center space-y-2">
         <h1 className="font-display text-3xl">Settings</h1>
         <p className="text-muted text-sm">{user?.email}</p>
+      </section>
+
+      <section className="card p-6 space-y-4">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="font-display text-lg">Theme</h2>
+            <p className="text-sm text-muted">Switch between light and dark mode.</p>
+          </div>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="btn-primary !px-4 !py-2 text-sm"
+          >
+            {theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
+          </button>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="card p-4 border border-white/10">
+            <p className="text-sm font-semibold text-ink">Current theme</p>
+            <p className="text-xs text-muted mt-1">{theme === 'dark' ? 'Dark' : 'Light'}</p>
+          </div>
+          <div className="card p-4 border border-white/10">
+            <p className="text-sm font-semibold text-ink">Saved preferences</p>
+            <p className="text-xs text-muted mt-1">Auto-applied on every visit.</p>
+          </div>
+        </div>
+      </section>
+
+      <section className="card p-6 space-y-4">
+        <h2 className="font-display text-lg">App preferences</h2>
+        <div className="space-y-3">
+          <label className="flex items-center justify-between gap-4 rounded-2xl border border-midnight-border bg-midnight-surface px-4 py-4">
+            <div>
+              <p className="font-semibold text-ink">Sound effects</p>
+              <p className="text-xs text-muted">Toggle the app audio feedback.</p>
+            </div>
+            <input
+              type="checkbox"
+              checked={preferences.soundEffects}
+              onChange={() => handlePreferenceToggle('soundEffects')}
+              className="h-5 w-5 rounded bg-midnight-border text-heart-purple"
+            />
+          </label>
+          <label className="flex items-center justify-between gap-4 rounded-2xl border border-midnight-border bg-midnight-surface px-4 py-4">
+            <div>
+              <p className="font-semibold text-ink">Reduced motion</p>
+              <p className="text-xs text-muted">Lower animations across the app.</p>
+            </div>
+            <input
+              type="checkbox"
+              checked={preferences.reduceMotion}
+              onChange={() => handlePreferenceToggle('reduceMotion')}
+              className="h-5 w-5 rounded bg-midnight-border text-heart-purple"
+            />
+          </label>
+          <label className="flex items-center justify-between gap-4 rounded-2xl border border-midnight-border bg-midnight-surface px-4 py-4">
+            <div>
+              <p className="font-semibold text-ink">Compact layout</p>
+              <p className="text-xs text-muted">Use tighter spacing and smaller cards.</p>
+            </div>
+            <input
+              type="checkbox"
+              checked={preferences.compactMode}
+              onChange={() => handlePreferenceToggle('compactMode')}
+              className="h-5 w-5 rounded bg-midnight-border text-heart-purple"
+            />
+          </label>
+          <label className="flex items-center justify-between gap-4 rounded-2xl border border-midnight-border bg-midnight-surface px-4 py-4">
+            <div>
+              <p className="font-semibold text-ink">Item hints</p>
+              <p className="text-xs text-muted">Show extra item descriptions in the spin wheel and inventory.</p>
+            </div>
+            <input
+              type="checkbox"
+              checked={preferences.showItemHints}
+              onChange={() => handlePreferenceToggle('showItemHints')}
+              className="h-5 w-5 rounded bg-midnight-border text-heart-purple"
+            />
+          </label>
+        </div>
+        <button
+          type="button"
+          onClick={resetPreferences}
+          className="btn-ghost !px-4 !py-2 text-sm"
+        >
+          Reset preferences
+        </button>
       </section>
 
       {isAdmin && (
@@ -246,6 +338,21 @@ export default function Settings() {
             </div>
           </div>
         )}
+      </section>
+
+      <section className="card p-6 space-y-4">
+        <h2 className="font-display text-lg">Account</h2>
+        <p className="text-sm text-muted">
+          Signed in as <span className="font-semibold text-ink">{user?.email}</span>
+        </p>
+        <div className="flex flex-col gap-3">
+          <button type="button" onClick={signOut} className="btn-ghost !text-ink">
+            Sign out
+          </button>
+          <div className="rounded-2xl border border-midnight-border bg-midnight-surface p-4 text-xs text-muted">
+            App version: 1.0.0
+          </div>
+        </div>
       </section>
     </div>
   )

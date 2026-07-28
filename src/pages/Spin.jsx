@@ -1,24 +1,31 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import {
-  spinWheel,
-  getMyInventory,
-  useFire,
-  useLighter,
-  useSword,
-  useStar,
-  useArrow,
-  useShield,
-  useMagnet,
-  useClover,
-  useMirror,
-} from '../lib/game'
+import { spinWheel } from '../lib/game'
 import { ITEM_INFO } from '../lib/items'
 import { watchRewardedAd } from '../lib/ads'
-import UsernameSearchInput from '../components/UsernameSearchInput'
 
 const SPIN_COST = 5
-const WHEEL_ICON = '/images/items/wheel.png'
+
+// Wheel items without handshake (includes pet items + coins)
+const WHEEL_ORDER = [
+  'fire',
+  'star',
+  'clover',
+  'mirror',
+  'sword',
+  'shield',
+  'magnet',
+  'arrow',
+  'lighter',
+  'spear',
+  'pettreat',
+  'pettoy',
+  'petmedicine',
+  'coins',
+]
+
+const WHEEL_COLORS = new Array(WHEEL_ORDER.length).fill('#111')
 
 const ITEMS = {
   ...ITEM_INFO,
@@ -29,62 +36,137 @@ const ITEMS = {
   },
 }
 
-const TARGET_ACTION_LABEL = {
-  lighter: 'Gift',
-  arrow: 'Shoot',
-  magnet: 'Steal',
+function polarToCartesian(cx, cy, radius, angleInDegrees) {
+  const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180.0
+  return {
+    x: cx + radius * Math.cos(angleInRadians),
+    y: cy + radius * Math.sin(angleInRadians),
+  }
+}
+
+function describeSector(cx, cy, radius, startAngle, endAngle) {
+  const start = polarToCartesian(cx, cy, radius, endAngle)
+  const end = polarToCartesian(cx, cy, radius, startAngle)
+  const largeArcFlag = endAngle - startAngle <= 180 ? 0 : 1
+  return `M ${cx} ${cy} L ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArcFlag} 0 ${end.x} ${end.y} Z`
+}
+
+function getSectorRotation(type) {
+  const total = WHEEL_ORDER.length
+  const index = WHEEL_ORDER.indexOf(type)
+  const sliceAngle = 360 / total
+  const targetCenter = index * sliceAngle + sliceAngle / 2
+  return 360 - targetCenter
+}
+
+function Wheel({ rotation, spinning }) {
+  const sectors = WHEEL_ORDER.map((itemType, index) => ({
+    itemType,
+    color: WHEEL_COLORS[index % WHEEL_COLORS.length],
+    icon: ITEMS[itemType]?.icon,
+    name: ITEMS[itemType]?.name,
+  }))
+  const sliceAngle = 360 / sectors.length
+  const radius = 140
+  const center = 160
+
+  return (
+    <div className="relative w-72 h-72 rounded-full overflow-hidden">
+      <svg viewBox="0 0 320 320" className="w-full h-full">
+        <g
+          style={{
+            transform: `rotate(${rotation}deg)`,
+            transformOrigin: '160px 160px',
+            transition: spinning ? 'transform 4.2s cubic-bezier(0.18,0.82,0.3,1)' : 'none',
+          }}
+        >
+          {sectors.map((sector, index) => {
+            const startAngle = index * sliceAngle
+            const endAngle = startAngle + sliceAngle
+            const midAngle = startAngle + sliceAngle / 2
+            const labelPos = polarToCartesian(0, 0, radius * 0.62, midAngle)
+            return (
+              <g key={`${sector.itemType}-${index}`}>
+                <path
+                  d={describeSector(center, center, radius, startAngle, endAngle)}
+                  fill={sector.color}
+                  stroke="rgba(255,255,255,0.12)"
+                  strokeWidth="1"
+                />
+                <g transform={`translate(${center + labelPos.x}, ${center + labelPos.y}) rotate(${midAngle})`}>
+                  <rect x="-18" y="-18" width="36" height="36" rx="10" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
+                  <image href={sector.icon} width="20" height="20" x="-10" y="-10" />
+                </g>
+              </g>
+            )
+          })}
+          <circle cx={center} cy={center} r="28" fill="#090214" stroke="rgba(255,255,255,0.12)" strokeWidth="2" />
+        </g>
+      </svg>
+      <div className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2 w-0 h-0 border-[14px] border-x-transparent border-b-white" />
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <div className="w-20 h-20 rounded-full bg-midnight border border-white/10 shadow-[0_0_0_10px_rgba(255,255,255,0.02)] backdrop-blur-sm" />
+      </div>
+    </div>
+  )
 }
 
 export default function Spin() {
   const { profile, refreshProfile } = useAuth()
+  const isVerified = Boolean(profile?.is_verified)
+  const hasPremium = Boolean(profile?.premium_unlocked) || (profile?.fame ?? 0) >= 500
 
   const [spinning, setSpinning] = useState(false)
   const [result, setResult] = useState(null)
+  const [pendingResult, setPendingResult] = useState(null)
   const [error, setError] = useState('')
-
-  const [inventory, setInventory] = useState([])
-  const [loadingInventory, setLoadingInventory] = useState(true)
-
-  const [giftingId, setGiftingId] = useState(null)
-  const [giftTarget, setGiftTarget] = useState('')
-  const [actionError, setActionError] = useState('')
-  const [actionSuccess, setActionSuccess] = useState('')
-  const [actingId, setActingId] = useState(null)
+  const [wheelRotation, setWheelRotation] = useState(0)
+  const [wheelSpinning, setWheelSpinning] = useState(false)
 
   const [watchingAd, setWatchingAd] = useState(false)
   const [adChoiceOpen, setAdChoiceOpen] = useState(false)
   const [adError, setAdError] = useState('')
   const [adSuccess, setAdSuccess] = useState('')
 
-  // Toggle state to hide/show possible items list
   const [showLegend, setShowLegend] = useState(false)
 
-  const refreshInventory = useCallback(async () => {
-    const items = await getMyInventory()
-    setInventory(items)
-  }, [])
-
-  useEffect(() => {
-    refreshInventory().finally(() => setLoadingInventory(false))
-  }, [refreshInventory])
-
   const handleSpin = async () => {
+    // PREVENT DOUBLE CLICK / SPAM CLICK
+    if (spinning || wheelSpinning) return
+
     setError('')
     setResult(null)
+    setPendingResult(null)
     setSpinning(true)
+    setWheelSpinning(true)
+
     try {
       const spinResult = await spinWheel()
-      await new Promise((r) => setTimeout(r, 900))
-      setResult(spinResult)
-      await Promise.all([refreshProfile(), refreshInventory()])
+      const targetRotation = getSectorRotation(spinResult.item_type)
+      const currentFullRotations = Math.ceil(wheelRotation / 360)
+      const finalRotation = currentFullRotations * 360 + 1440 + targetRotation
+      
+      setWheelRotation(finalRotation)
+      setPendingResult(spinResult)
+
+      // Delay state reveal and profile refresh until spin animation finishes
+      setTimeout(async () => {
+        setWheelSpinning(false)
+        setSpinning(false)
+        setResult(spinResult)
+        await refreshProfile()
+      }, 4200)
+
     } catch (err) {
       setError(err.message || 'Could not spin right now.')
-    } finally {
+      setWheelSpinning(false)
       setSpinning(false)
     }
   }
 
   const handleWatchAd = async (rewardType) => {
+    if (watchingAd) return
+
     setAdError('')
     setAdSuccess('')
     setAdChoiceOpen(false)
@@ -100,152 +182,9 @@ export default function Spin() {
     }
   }
 
-  const handleUseFire = async (itemId) => {
-    setActionError('')
-    setActionSuccess('')
-    setActingId(itemId)
-    try {
-      await useFire(itemId)
-      setActionSuccess('🔥 Fame +5!')
-      await Promise.all([refreshProfile(), refreshInventory()])
-    } catch (err) {
-      setActionError(err.message || 'Could not use that item.')
-    } finally {
-      setActingId(null)
-    }
-  }
-
-  const handleUseSword = async (itemId) => {
-    setActionError('')
-    setActionSuccess('')
-    setActingId(itemId)
-    try {
-      await useSword(itemId)
-      setActionSuccess('⚔️ Your messages to your crush are priority for the next 24h.')
-      await refreshInventory()
-    } catch (err) {
-      setActionError(err.message || 'Could not use that item.')
-    } finally {
-      setActingId(null)
-    }
-  }
-
-  const handleUseStar = async (itemId) => {
-    setActionError('')
-    setActionSuccess('')
-    setActingId(itemId)
-    try {
-      await useStar(itemId)
-      setActionSuccess('⭐ Fame +10!')
-      await Promise.all([refreshProfile(), refreshInventory()])
-    } catch (err) {
-      setActionError(err.message || 'Could not use that item.')
-    } finally {
-      setActingId(null)
-    }
-  }
-
-  const handleUseShield = async (itemId) => {
-    setActionError('')
-    setActionSuccess('')
-    setActingId(itemId)
-    try {
-      await useShield(itemId)
-      setActionSuccess("🛡️ You're shielded from arrows for the next 24h.")
-      await refreshInventory()
-    } catch (err) {
-      setActionError(err.message || 'Could not use that item.')
-    } finally {
-      setActingId(null)
-    }
-  }
-
-  const handleUseArrow = async (itemId) => {
-    setActionError('')
-    setActionSuccess('')
-    if (!giftTarget.trim()) return
-    setActingId(itemId)
-    try {
-      await useArrow(itemId, giftTarget)
-      setActionSuccess(`🏹 Hit @${giftTarget.trim().toLowerCase()} with an arrow — their fame dropped by 5.`)
-      setGiftingId(null)
-      setGiftTarget('')
-      await refreshInventory()
-    } catch (err) {
-      setActionError(err.message || 'Could not use that item.')
-    } finally {
-      setActingId(null)
-    }
-  }
-
-  const handleUseLighter = async (itemId) => {
-    setActionError('')
-    setActionSuccess('')
-    if (!giftTarget.trim()) return
-    setActingId(itemId)
-    try {
-      await useLighter(itemId, giftTarget)
-      setActionSuccess(`🕯️ Gifted +5 fame to @${giftTarget.trim().toLowerCase()}.`)
-      setGiftingId(null)
-      setGiftTarget('')
-      await refreshInventory()
-    } catch (err) {
-      setActionError(err.message || 'Could not gift that item.')
-    } finally {
-      setActingId(null)
-    }
-  }
-
-  const handleUseMagnet = async (itemId) => {
-    setActionError('')
-    setActionSuccess('')
-    if (!giftTarget.trim()) return
-    setActingId(itemId)
-    try {
-      await useMagnet(itemId, giftTarget)
-      setActionSuccess(`🧲 Siphoned 3 fame from @${giftTarget.trim().toLowerCase()}!`)
-      setGiftingId(null)
-      setGiftTarget('')
-      await Promise.all([refreshProfile(), refreshInventory()])
-    } catch (err) {
-      setActionError(err.message || 'Could not use magnet.')
-    } finally {
-      setActingId(null)
-    }
-  }
-
-  const handleUseClover = async (itemId) => {
-    setActionError('')
-    setActionSuccess('')
-    setActingId(itemId)
-    try {
-      await useClover(itemId)
-      setActionSuccess('🍀 Feeling lucky! +10 coins added!')
-      await Promise.all([refreshProfile(), refreshInventory()])
-    } catch (err) {
-      setActionError(err.message || 'Could not use clover.')
-    } finally {
-      setActingId(null)
-    }
-  }
-
-  const handleUseMirror = async (itemId) => {
-    setActionError('')
-    setActionSuccess('')
-    setActingId(itemId)
-    try {
-      await useMirror(itemId)
-      setActionSuccess('🪞 Mirror active! Incoming arrows will reflect back for 24h.')
-      await refreshInventory()
-    } catch (err) {
-      setActionError(err.message || 'Could not use mirror.')
-    } finally {
-      setActingId(null)
-    }
-  }
-
   const freeSpins = profile?.ad_free_spins ?? 0
   const canSpin = freeSpins > 0 || (profile?.coins ?? 0) >= SPIN_COST
+  const isButtonDisabled = spinning || wheelSpinning || !canSpin
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-10 space-y-8">
@@ -267,39 +206,71 @@ export default function Spin() {
             </span>
           )}
         </div>
+        <div className="flex flex-wrap justify-center gap-3 mt-3">
+          {isVerified && (
+            <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-3 py-1 text-xs text-sky-200">
+              Verified perk: extra spin shimmer
+            </span>
+          )}
+          {hasPremium && (
+            <span className="rounded-full border border-heart-yellow/30 bg-heart-yellow/10 px-3 py-1 text-xs text-heart-yellow">
+              Premium perk: ad-free spins + faster results
+            </span>
+          )}
+        </div>
       </section>
 
       {/* Spin wheel */}
       <section className="card p-8 flex flex-col items-center gap-5">
         <div
-          className={`w-28 h-28 rounded-full border-2 border-heart-purple/50 flex items-center justify-center transition-transform duration-700 ${
-            spinning ? 'animate-spin' : ''
+          className={`relative w-72 h-72 rounded-full border-2 flex items-center justify-center ${
+            hasPremium ? 'border-heart-yellow/60' : isVerified ? 'border-sky-400/60' : 'border-heart-purple/50'
           }`}
         >
-          <img
-            src={spinning || !result ? WHEEL_ICON : ITEMS[result.item_type]?.icon}
-            alt=""
-            className="w-16 h-16"
-          />
+          <Wheel rotation={wheelRotation} spinning={wheelSpinning} />
+          {!wheelSpinning && pendingResult && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm rounded-full transition-opacity duration-300">
+              <div className="w-60 p-5 rounded-3xl border border-white/10 bg-white/10 text-center shadow-[0_0_0_1px_rgba(255,255,255,0.06)]">
+                <p className="text-sm uppercase tracking-[0.3em] text-muted">Result</p>
+                <img
+                  src={ITEMS[pendingResult.item_type]?.icon}
+                  alt={ITEMS[pendingResult.item_type]?.name}
+                  className="mx-auto my-4 w-16 h-16"
+                />
+                <p className="font-display text-xl text-ink">
+                  {pendingResult.item_type === 'coins'
+                    ? 'You got +3 coins!'
+                    : `You got ${ITEMS[pendingResult.item_type]?.name}!`}
+                </p>
+                <p className="text-sm text-muted mt-1">{ITEMS[pendingResult.item_type]?.tagline}</p>
+              </div>
+            </div>
+          )}
         </div>
 
-        {result && !spinning && (
-          <div className="text-center">
+        {result && !spinning && !wheelSpinning && (
+          <div className="text-center space-y-2">
             <p className="font-display text-xl">
-              {result.item_type === 'coins' ? 'You got +3 coins!' : `You got a ${ITEMS[result.item_type]?.name}!`}
+              {result.item_type === 'coins' ? 'Spin complete!' : `Confirmed: ${ITEMS[result.item_type]?.name}`}
             </p>
             <p className="text-sm text-muted mt-1">{ITEMS[result.item_type]?.tagline}</p>
+            {(isVerified || hasPremium) && (
+              <p className="text-xs text-muted">
+                {isVerified && '✨ Verified perk active — your spin sparkled extra bright.'}
+                {hasPremium && !isVerified && '👑 Premium perk active — enjoy the faster spin reveal.'}
+              </p>
+            )}
           </div>
         )}
 
         <button
           onClick={handleSpin}
-          disabled={spinning || !canSpin}
-          className="btn-primary !px-6 !py-3"
+          disabled={isButtonDisabled}
+          className="btn-primary !px-6 !py-3 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {spinning ? 'Spinning…' : freeSpins > 0 ? 'Spin (free!)' : `Spin for ${SPIN_COST} 🪙`}
+          {spinning || wheelSpinning ? 'Spinning…' : freeSpins > 0 ? 'Spin (free!)' : `Spin for ${SPIN_COST} 🪙`}
         </button>
-        {!canSpin && !spinning && (
+        {!canSpin && !spinning && !wheelSpinning && (
           <p className="text-xs text-muted">Not enough coins — come back tomorrow for more.</p>
         )}
         {error && <p className="text-heart-red text-sm">{error}</p>}
@@ -307,28 +278,37 @@ export default function Spin() {
 
       {/* Watch an ad for a bonus */}
       <section className="card p-5 flex flex-col items-center gap-3 text-center">
-        {adChoiceOpen ? (
+        {hasPremium ? (
+          <>
+            <p className="text-sm text-muted">
+              Premium accounts skip ads and enjoy an enhanced spin experience.
+            </p>
+            <p className="text-xs text-heart-yellow">
+              👑 You are premium — no rewarded ads needed for bonus spins.
+            </p>
+          </>
+        ) : adChoiceOpen ? (
           <>
             <p className="text-sm text-muted">Pick your reward, then watch the ad:</p>
             <div className="flex gap-3">
               <button
                 onClick={() => handleWatchAd('coins')}
                 disabled={watchingAd}
-                className="btn-primary !px-4 !py-2 text-sm"
+                className="btn-primary !px-4 !py-2 text-sm disabled:opacity-50"
               >
                 🪙 +5 coins
               </button>
               <button
                 onClick={() => handleWatchAd('spin')}
                 disabled={watchingAd}
-                className="btn-primary !px-4 !py-2 text-sm"
+                className="btn-primary !px-4 !py-2 text-sm disabled:opacity-50"
               >
                 🎡 Free spin
               </button>
               <button
                 onClick={() => setAdChoiceOpen(false)}
                 disabled={watchingAd}
-                className="text-xs text-muted hover:text-ink px-1"
+                className="text-xs text-muted hover:text-ink px-1 disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -338,7 +318,7 @@ export default function Spin() {
           <button
             onClick={() => setAdChoiceOpen(true)}
             disabled={watchingAd}
-            className="btn-ghost !px-4 !py-2 text-sm"
+            className="btn-ghost !px-4 !py-2 text-sm disabled:opacity-50"
           >
             🎬 {watchingAd ? 'Loading ad…' : 'Watch an ad for a bonus'}
           </button>
@@ -373,100 +353,15 @@ export default function Spin() {
         )}
       </section>
 
-      {/* Inventory */}
-      <section>
-        <h2 className="font-display text-xl mb-3">Your inventory</h2>
-        {actionError && <p className="text-heart-red text-sm mb-3">{actionError}</p>}
-        {actionSuccess && <p className="text-heart-green text-sm mb-3">{actionSuccess}</p>}
-
-        {loadingInventory ? (
-          <p className="text-muted text-sm font-mono text-center">loading…</p>
-        ) : inventory.length === 0 ? (
-          <div className="card p-8 text-center text-muted text-sm">
-            No items yet — spin to get your first one.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {inventory
-              .filter((item) => ITEMS[item.item_type])
-              .map((item) => {
-                const config = ITEMS[item.item_type]
-                const isActing = actingId === item.id
-                return (
-                  <div key={item.id} className="card p-4 flex items-center gap-4">
-                    <img src={config.icon} alt="" className="w-9 h-9 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-ink">{config.name}</p>
-                      <p className="text-xs text-muted">{config.tagline}</p>
-
-                      {giftingId === item.id && (
-                        <div className="mt-2 space-y-2">
-                          {item.item_type === 'arrow' && (
-                            <p className="text-xs text-heart-red">
-                              This will reduce their fame by 5 — blocked if they're currently shielded.
-                            </p>
-                          )}
-                          <div className="flex flex-col sm:flex-row gap-2">
-                            <div className="flex-1">
-                              <UsernameSearchInput
-                                value={giftTarget}
-                                onChange={setGiftTarget}
-                                excludeUsername={profile?.username}
-                              />
-                            </div>
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => {
-                                  if (item.item_type === 'arrow') handleUseArrow(item.id)
-                                  else if (item.item_type === 'magnet') handleUseMagnet(item.id)
-                                  else handleUseLighter(item.id)
-                                }}
-                                disabled={isActing || !giftTarget.trim()}
-                                className="btn-primary !px-4 !py-2 text-sm whitespace-nowrap"
-                              >
-                                {isActing ? `${TARGET_ACTION_LABEL[item.item_type]}ing…` : TARGET_ACTION_LABEL[item.item_type]}
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setGiftingId(null)
-                                  setGiftTarget('')
-                                }}
-                                className="btn-ghost !px-3 !py-2 text-sm"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {giftingId !== item.id && (
-                      <button
-                        onClick={() => {
-                          if (item.item_type === 'fire') handleUseFire(item.id)
-                          else if (item.item_type === 'sword') handleUseSword(item.id)
-                          else if (item.item_type === 'star') handleUseStar(item.id)
-                          else if (item.item_type === 'shield') handleUseShield(item.id)
-                          else if (item.item_type === 'clover') handleUseClover(item.id)
-                          else if (item.item_type === 'mirror') handleUseMirror(item.id)
-                          else {
-                            setGiftingId(item.id)
-                            setActionError('')
-                            setActionSuccess('')
-                          }
-                        }}
-                        disabled={isActing}
-                        className="btn-ghost !px-4 !py-2 text-sm whitespace-nowrap"
-                      >
-                        {isActing ? 'Using…' : 'Use'}
-                      </button>
-                    )}
-                  </div>
-                )
-              })}
-          </div>
-        )}
+      {/* Inventory link */}
+      <section className="card p-5 flex items-center justify-between gap-4">
+        <div>
+          <h2 className="font-display text-lg">Your inventory</h2>
+          <p className="text-xs text-muted mt-1">Use, gift, or check what you've won.</p>
+        </div>
+        <Link to="/inventory" className="btn-primary !px-4 !py-2 text-sm whitespace-nowrap">
+          View inventory
+        </Link>
       </section>
     </div>
   )

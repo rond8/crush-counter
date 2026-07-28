@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
@@ -6,6 +6,18 @@ const AUTO_DISMISS_MS = 7000
 
 export default function Notifications() {
   const { dailyReward, clearDailyReward, newAdmirer, clearNewAdmirer } = useAuth()
+  const [showHeartAnimation, setShowHeartAnimation] = useState(false)
+
+  const heartSpots = useMemo(
+    () => [
+      { left: '22%' },
+      { left: '38%' },
+      { left: '50%' },
+      { left: '62%' },
+      { left: '78%' },
+    ],
+    []
+  )
 
   useEffect(() => {
     if (!dailyReward) return
@@ -15,20 +27,39 @@ export default function Notifications() {
 
   useEffect(() => {
     if (!newAdmirer) return
-    const timer = setTimeout(clearNewAdmirer, AUTO_DISMISS_MS)
-    return () => clearTimeout(timer)
+    setShowHeartAnimation(true)
+    const heartTimer = setTimeout(() => setShowHeartAnimation(false), 1200)
+    const clearTimer = setTimeout(clearNewAdmirer, AUTO_DISMISS_MS)
+    return () => {
+      clearTimeout(heartTimer)
+      clearTimeout(clearTimer)
+    }
   }, [newAdmirer, clearNewAdmirer])
 
   if (!dailyReward && !newAdmirer) return null
 
   return (
-    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 w-[calc(100%-2rem)] max-w-sm">
-      {newAdmirer && (
-        <Link
-          to="/dashboard"
-          onClick={clearNewAdmirer}
-          className="card ring-1 ring-heart-red/50 shadow-glow px-4 py-3 flex items-center gap-3 animate-pulseGlow"
-        >
+    <>
+      {showHeartAnimation && (
+        <div className="heart-receive-overlay" aria-hidden="true">
+          {heartSpots.map((spot, index) => (
+            <span
+              key={index}
+              className="heart-receive"
+              style={{ left: spot.left, animationDelay: `${index * 0.08}s` }}
+            >
+              ❤️
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 w-[calc(100%-2rem)] max-w-sm">
+        {newAdmirer && (
+          <Link
+            to="/dashboard"
+            onClick={clearNewAdmirer}
+            className="card ring-1 ring-heart-red/50 shadow-glow px-4 py-3 flex items-center gap-3 animate-pulseGlow"
+          >
           <span className="text-2xl">❤️</span>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-heart-red">
@@ -60,5 +91,6 @@ export default function Notifications() {
         </div>
       )}
     </div>
+  </>
   )
 }
