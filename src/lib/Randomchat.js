@@ -6,8 +6,11 @@ import { supabase } from '../supabaseClient'
  * waiting, joins the queue and returns a random profile to browse
  * (matched: false, fallback_*).
  */
-export async function findRandomMatch(anonymous) {
-  const { data, error } = await supabase.rpc('find_random_match', { p_anonymous: anonymous })
+export async function findRandomMatch(anonymous, targetGender = 'all') {
+  const { data, error } = await supabase.rpc('find_random_match', {
+    p_anonymous: anonymous,
+    p_target_gender: targetGender
+  })
   if (error) throw error
   return data?.[0] ?? null
 }
@@ -62,4 +65,15 @@ export async function getRandomChatStatus(sessionId) {
   const { data, error } = await supabase.rpc('get_random_chat_status', { p_session_id: sessionId })
   if (error) throw error
   return data?.[0] ?? { ended: false, ended_by_me: false }
+}
+
+export async function sendGroupMessage(body) {
+  const { error } = await supabase.rpc('send_group_message', { p_body: body })
+  if (error) throw error
+}
+
+export async function getGroupMessages() {
+  const { data, error } = await supabase.rpc('get_group_messages')
+  if (error) throw error
+  return data ?? []
 }

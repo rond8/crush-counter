@@ -3,6 +3,8 @@
 -- Run this in the Supabase SQL Editor (SQL Editor > New query)
 -- =========================================================
 
+create extension if not exists pgcrypto with schema extensions;
+
 -- ---------------------------------------------------------
 -- Tables
 -- ---------------------------------------------------------
@@ -15,6 +17,7 @@ create table if not exists profiles (
   gender text,
   relationship_status text,
   age integer check (age is null or (age >= 18 and age <= 120)),
+  birthday date check (birthday is null or birthday <= (current_date - interval '18 years')),
   location text,
   bio text check (bio is null or char_length(bio) <= 300),
   created_at timestamptz not null default now()
@@ -26,6 +29,7 @@ alter table profiles add column if not exists avatar_url text;
 alter table profiles add column if not exists gender text;
 alter table profiles add column if not exists relationship_status text;
 alter table profiles add column if not exists age integer;
+alter table profiles add column if not exists birthday date;
 alter table profiles add column if not exists location text;
 alter table profiles add column if not exists bio text;
 alter table profiles add column if not exists last_seen timestamptz;
@@ -34,6 +38,12 @@ alter table profiles add column if not exists fame integer not null default 0;
 alter table profiles add column if not exists last_daily_reward date;
 alter table profiles add column if not exists last_seen_admirer_count integer not null default 0;
 alter table profiles add column if not exists leaderboard_opt_in boolean;
+alter table profiles add column if not exists is_verified boolean not null default false;
+alter table profiles add column if not exists has_adopted_pet boolean not null default false;
+alter table profiles add column if not exists last_password_reset timestamptz;
+alter table profiles add column if not exists hobbies text;
+alter table profiles add column if not exists likes text;
+alter table profiles add column if not exists favorite_artist text;
 
 create table if not exists crushes (
   id uuid primary key default gen_random_uuid(),
@@ -56,14 +66,17 @@ create index if not exists crushes_sender_id_idx on crushes (sender_id);
 -- and to show display names on matches). Only the owner can write.
 alter table profiles enable row level security;
 
+drop policy if exists "Profiles are publicly readable" on profiles;
 create policy "Profiles are publicly readable"
   on profiles for select
   using (true);
 
+drop policy if exists "Users can insert their own profile" on profiles;
 create policy "Users can insert their own profile"
   on profiles for insert
   with check (auth.uid() = id);
 
+drop policy if exists "Users can update their own profile" on profiles;
 create policy "Users can update their own profile"
   on profiles for update
   using (auth.uid() = id);
@@ -75,10 +88,12 @@ insert into storage.buckets (id, name, public)
 values ('avatars', 'avatars', true)
 on conflict (id) do nothing;
 
+drop policy if exists "Avatar images are publicly accessible" on storage.objects;
 create policy "Avatar images are publicly accessible"
   on storage.objects for select
   using (bucket_id = 'avatars');
 
+drop policy if exists "Users can upload their own avatar" on storage.objects;
 create policy "Users can upload their own avatar"
   on storage.objects for insert
   with check (
@@ -86,6 +101,7 @@ create policy "Users can upload their own avatar"
     and (storage.foldername(name))[1] = auth.uid()::text
   );
 
+drop policy if exists "Users can update their own avatar" on storage.objects;
 create policy "Users can update their own avatar"
   on storage.objects for update
   using (
@@ -93,6 +109,7 @@ create policy "Users can update their own avatar"
     and (storage.foldername(name))[1] = auth.uid()::text
   );
 
+drop policy if exists "Users can delete their own avatar" on storage.objects;
 create policy "Users can delete their own avatar"
   on storage.objects for delete
   using (
@@ -106,6 +123,7 @@ create policy "Users can delete their own avatar"
 -- unmatched sender's identity to the client.
 alter table crushes enable row level security;
 
+drop policy if exists "Users can view hearts they personally sent" on crushes;
 create policy "Users can view hearts they personally sent"
   on crushes for select
   using (auth.uid() = sender_id);
@@ -145,6 +163,7 @@ create table if not exists announcements (
 
 alter table announcements enable row level security;
 
+drop policy if exists "Announcements are publicly readable" on announcements;
 create policy "Announcements are publicly readable"
   on announcements for select
   using (true);
@@ -208,6 +227,7 @@ $$;
 --   'purple'  -> mutual match (target's crush is also the caller)
 --   'green'   -> someone else's current crush is also this target
 --   'pending' -> set, no match/competition signal yet
+drop function if exists get_my_crush();
 create or replace function get_my_crush()
 returns table(target_username text, status text, updated_at timestamptz, target_last_seen timestamptz)
 language plpgsql
@@ -273,6 +293,7 @@ $$;
 
 -- Anonymous count of people who have sent the current user a heart,
 -- excluding senders who are already revealed via a mutual match.
+drop function if exists get_my_admirer_status();
 create or replace function get_my_admirer_status()
 returns table(has_admirer boolean, admirer_count int)
 language plpgsql
@@ -309,6 +330,7 @@ $$;
 -- admirer" notification. Always updates the stored count as a side
 -- effect, so each increase is only ever flagged once. Never flags a
 -- decrease (e.g. someone changed their crush away) as "new".
+drop function if exists check_new_admirers();
 create or replace function check_new_admirers()
 returns table(has_new boolean, new_count integer, current_count integer)
 language plpgsql
@@ -361,6 +383,7 @@ $$;
 -- already-revealed mutual matches (handled by get_my_matches instead).
 -- masked_username always shows exactly the first letter + 3 dots, so
 -- the true username length is never leaked either.
+drop function if exists get_my_admirer_hints();
 create or replace function get_my_admirer_hints()
 returns table(
   masked_username text,
@@ -386,7 +409,7 @@ begin
   select
     left(sender.username, 1) || '•••' as masked_username,
     sender.gender,
-    sender.age,
+    coalesce(sender.age, extract(year from age(sender.birthday))::integer) as age,
     sender.location,
     received.updated_at as set_at
   from crushes received
@@ -465,6 +488,7 @@ alter table messages enable row level security;
 
 -- Senders can see their own sent messages directly (no anonymity
 -- concern there — they know who they sent them to).
+drop policy if exists "Users can view messages they personally sent" on messages;
 create policy "Users can view messages they personally sent"
   on messages for select
   using (auth.uid() = sender_id);
@@ -604,6 +628,7 @@ create index if not exists inventory_items_owner_idx on inventory_items (owner_i
 
 alter table inventory_items enable row level security;
 
+drop policy if exists "Users can view their own inventory" on inventory_items;
 create policy "Users can view their own inventory"
   on inventory_items for select
   using (auth.uid() = owner_id);
@@ -620,6 +645,7 @@ grant select on inventory_items to authenticated;
 
 -- Grant the once-per-day coin reward. Safe to call every time the app
 -- opens — it's a no-op if already claimed today (UTC).
+drop function if exists claim_daily_coins();
 create or replace function claim_daily_coins()
 returns table(awarded boolean, amount integer, new_balance integer)
 language plpgsql
@@ -654,6 +680,7 @@ $$;
 
 -- Spend coins on a spin. Returns a random item and adds it to the
 -- caller's inventory, unused.
+drop function if exists spin_wheel();
 create or replace function spin_wheel()
 returns table(item_type text, new_balance integer, inventory_id uuid)
 language plpgsql
@@ -695,7 +722,46 @@ begin
 end;
 $$;
 
+-- ---------------------------------------------------------
+-- Password management
+-- ---------------------------------------------------------
+
+-- Allow a user to update their own password. This is useful for both
+-- a standard "change password" feature and the final step of a
+-- "forgot password" flow (after the user has logged in via a recovery
+-- link).
+-- Note: To trigger a password reset email from your application, use:
+-- supabase.auth.resetPasswordForEmail(email)
+create or replace function update_password(p_new_password text)
+returns void
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  update auth.users
+  set encrypted_password = extensions.crypt(p_new_password, extensions.gen_salt('bf')),
+      updated_at = now()
+  where id = auth.uid();
+
+  update profiles
+  set last_password_reset = now()
+  where id = auth.uid();
+
+  -- Optional: Notify the user of the change
+  insert into notifications (recipient_id, type, title, body)
+  values (auth.uid(), 'admin_message', 'Password updated', 'Your account password has been changed successfully.');
+end;
+$$;
+
+grant execute on function update_password(text) to authenticated;
+
 -- Unused items in the caller's inventory.
+drop function if exists get_my_inventory();
 create or replace function get_my_inventory()
 returns table(id uuid, item_type text, acquired_at timestamptz)
 language plpgsql
@@ -883,6 +949,9 @@ begin
 
   delete from direct_messages
   where created_at < now() - interval '90 days';
+
+  delete from group_messages
+  where created_at < now() - interval '7 days';
 end;
 $$;
 
@@ -922,10 +991,12 @@ create index if not exists reports_reported_user_idx on reports (reported_user_i
 
 alter table reports enable row level security;
 
+drop policy if exists "Users can view their own submitted reports" on reports;
 create policy "Users can view their own submitted reports"
   on reports for select
   using (auth.uid() = reporter_id);
 
+drop policy if exists "Admins can view all reports" on reports;
 create policy "Admins can view all reports"
   on reports for select
   using (
@@ -940,6 +1011,7 @@ grant select on reports to authenticated;
 -- Report a specific message. Resolves the sender internally without
 -- ever exposing their identity to the (possibly anonymous-admirer)
 -- reporter.
+drop function if exists report_message(uuid, text, text);
 create or replace function report_message(p_message_id uuid, p_reason text, p_details text default null)
 returns void
 language plpgsql
@@ -976,6 +1048,7 @@ end;
 $$;
 
 -- Report a user's profile directly (e.g. inappropriate bio/photo).
+drop function if exists report_user(text, text, text);
 create or replace function report_user(p_username text, p_reason text, p_details text default null)
 returns void
 language plpgsql
@@ -1008,7 +1081,7 @@ end;
 $$;
 
 grant execute on function report_message(uuid, text, text) to authenticated;
-grant execute on function report_user(text, text) to authenticated;
+grant execute on function report_user(text, text, text) to authenticated;
 
 -- ---------------------------------------------------------
 -- Direct messages: open, two-way conversation — but only unlocked
@@ -1029,6 +1102,7 @@ create index if not exists direct_messages_conversation_idx
 
 alter table direct_messages enable row level security;
 
+drop policy if exists "Users can view direct messages they sent or received" on direct_messages;
 create policy "Users can view direct messages they sent or received"
   on direct_messages for select
   using (auth.uid() = sender_id or auth.uid() = recipient_id);
@@ -1108,6 +1182,7 @@ $$;
 
 -- Full conversation between the caller and the given matched username,
 -- oldest first.
+drop function if exists get_conversation(text);
 create or replace function get_conversation(p_other_username text)
 returns table(id uuid, body text, created_at timestamptz, is_mine boolean)
 language plpgsql
@@ -1142,6 +1217,89 @@ grant execute on function send_direct_message(text, text) to authenticated;
 grant execute on function get_conversation(text) to authenticated;
 
 -- ---------------------------------------------------------
+-- Group chat / Random chat: a single public room for all users.
+-- ---------------------------------------------------------
+
+create table if not exists group_messages (
+  id uuid primary key default gen_random_uuid(),
+  sender_id uuid references auth.users (id) on delete cascade not null,
+  body text not null check (char_length(body) between 1 and 500),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists group_messages_created_at_idx on group_messages (created_at desc);
+
+alter table group_messages enable row level security;
+
+drop policy if exists "Group messages are publicly readable" on group_messages;
+create policy "Group messages are publicly readable"
+  on group_messages for select
+  using (true);
+
+-- No direct insert — always goes through send_group_message()
+revoke insert, update, delete on group_messages from authenticated, anon;
+grant select on group_messages to anon, authenticated;
+
+create or replace function send_group_message(p_body text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  me uuid := auth.uid();
+  clean_body text := trim(p_body);
+begin
+  if me is null then
+    raise exception 'Not authenticated';
+  end if;
+  if clean_body = '' then
+    raise exception 'Message cannot be empty';
+  end if;
+  if char_length(clean_body) > 500 then
+    raise exception 'Message is too long (max 500 characters)';
+  end if;
+
+  insert into group_messages (sender_id, body)
+  values (me, clean_body);
+end;
+$$;
+
+create or replace function get_group_messages()
+returns table(
+  id uuid,
+  body text,
+  created_at timestamptz,
+  sender_username text,
+  sender_avatar_url text,
+  is_mine boolean
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  me uuid := auth.uid();
+begin
+  return query
+  select
+    gm.id,
+    gm.body,
+    gm.created_at,
+    p.username,
+    p.avatar_url,
+    (me is not null and gm.sender_id = me) as is_mine
+  from group_messages gm
+  join profiles p on p.id = gm.sender_id
+  order by gm.created_at desc
+  limit 50;
+end;
+$$;
+
+grant execute on function send_group_message(text) to authenticated;
+grant execute on function get_group_messages() to anon, authenticated;
+
+-- ---------------------------------------------------------
 -- Notifications: a persistent history, backing a Notifications page.
 --
 --   'admirer'       -> someone new has the recipient as their crush
@@ -1167,6 +1325,7 @@ create index if not exists notifications_recipient_idx on notifications (recipie
 
 alter table notifications enable row level security;
 
+drop policy if exists "Users can view their own notifications" on notifications;
 create policy "Users can view their own notifications"
   on notifications for select
   using (auth.uid() = recipient_id);
@@ -1177,6 +1336,7 @@ create policy "Users can view their own notifications"
 revoke insert, update, delete on notifications from authenticated, anon;
 grant select on notifications to authenticated;
 
+drop function if exists get_my_notifications();
 create or replace function get_my_notifications()
 returns table(id uuid, type text, title text, body text, link text, created_at timestamptz, read_at timestamptz)
 language plpgsql
@@ -1384,6 +1544,79 @@ $$;
 grant execute on function delete_my_account() to authenticated;
 
 -- ---------------------------------------------------------
+-- App Configuration
+-- ---------------------------------------------------------
+
+drop table if exists app_config cascade;
+create table app_config (
+  id integer primary key default 1 check (id = 1),
+  ads_live boolean not null default false,
+  updated_at timestamptz not null default now()
+);
+
+insert into app_config (id, ads_live) values (1, false);
+
+create or replace function get_app_config()
+returns table(ads_live boolean)
+language sql
+security definer
+set search_path = public
+as $$
+  select ads_live from app_config where id = 1;
+$$;
+
+create or replace function set_ads_live(p_live boolean)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (select 1 from profiles where id = auth.uid() and is_admin = true) then
+    raise exception 'Unauthorized';
+  end if;
+  update app_config set ads_live = p_live, updated_at = now() where id = 1;
+end;
+$$;
+
+grant execute on function get_app_config() to anon, authenticated;
+grant execute on function set_ads_live(boolean) to authenticated;
+
+-- ---------------------------------------------------------
+-- Admin: Admirer List
+-- ---------------------------------------------------------
+
+create or replace function get_admin_admirer_list()
+returns table(username text, display_name text, avatar_url text, admirer_count bigint)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  me uuid := auth.uid();
+  am_admin boolean;
+begin
+  if me is null then
+    raise exception 'Not authenticated';
+  end if;
+  select is_admin into am_admin from profiles where id = me;
+  if not coalesce(am_admin, false) then
+    raise exception 'Only admins can access this list';
+  end if;
+
+  return query
+  select p.username, p.display_name, p.avatar_url, count(c.id) as admirer_count
+  from profiles p
+  join crushes c on c.target_username = p.username
+  group by p.id, p.username, p.display_name, p.avatar_url
+  having count(c.id) > 0
+  order by admirer_count desc;
+end;
+$$;
+
+grant execute on function get_admin_admirer_list() to authenticated;
+
+-- ---------------------------------------------------------
 -- Thoughts page
 --
 --  - daily_topics: one admin-posted prompt per day ("Today's thought")
@@ -1404,6 +1637,7 @@ create table if not exists daily_topics (
 
 alter table daily_topics enable row level security;
 
+drop policy if exists "Daily topics are publicly readable" on daily_topics;
 create policy "Daily topics are publicly readable"
   on daily_topics for select
   using (true);
@@ -1423,6 +1657,7 @@ create table if not exists thoughts (
 
 alter table thoughts enable row level security;
 
+drop policy if exists "Thoughts are publicly readable" on thoughts;
 create policy "Thoughts are publicly readable"
   on thoughts for select
   using (true);
@@ -1444,6 +1679,7 @@ create index if not exists thought_likes_thought_idx on thought_likes (thought_i
 
 alter table thought_likes enable row level security;
 
+drop policy if exists "Thought likes are publicly readable" on thought_likes;
 create policy "Thought likes are publicly readable"
   on thought_likes for select
   using (true);
@@ -1487,6 +1723,7 @@ $$;
 
 -- Today's topic, computed from the database's own clock (avoids any
 -- timezone mismatch with the client's idea of "today").
+drop function if exists get_todays_topic();
 create or replace function get_todays_topic()
 returns table(topic text, active_date date)
 language sql
@@ -1544,6 +1781,7 @@ $$;
 -- Public feed of everyone's thoughts, newest-updated first, with like
 -- counts and whether the caller has liked / owns each one. Works for
 -- logged-out viewers too (me may be null) so the page can stay public.
+drop function if exists get_thoughts_feed();
 create or replace function get_thoughts_feed()
 returns table(
   id uuid,
@@ -1566,8 +1804,8 @@ begin
   return query
   select
     t.id,
-    p.username,
-    p.avatar_url,
+    p.username as author_username,
+    p.avatar_url as author_avatar_url,
     t.body,
     (select count(*) from thought_likes tl where tl.thought_id = t.id)::integer as like_count,
     (me is not null and exists (
@@ -1668,6 +1906,7 @@ $$;
 
 -- Top 10 by fame, opted-in accounts only, and only once at least 25
 -- accounts exist overall (returns empty before that point).
+drop function if exists get_leaderboard();
 create or replace function get_leaderboard()
 returns table(username text, avatar_url text, fame integer, gender text, relationship_status text)
 language sql
@@ -1687,53 +1926,129 @@ grant execute on function get_total_user_count() to anon, authenticated;
 grant execute on function get_leaderboard() to anon, authenticated;
 
 -- ---------------------------------------------------------
+-- Home Slider: Customizable slides for the Home page
+-- ---------------------------------------------------------
+
+create table if not exists home_slides (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  description text,
+  image_url text,
+  button_text text,
+  button_link text,
+  priority integer not null default 0,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+alter table home_slides enable row level security;
+
+drop policy if exists "Home slides are publicly readable" on home_slides;
+create policy "Home slides are publicly readable"
+  on home_slides for select
+  using (is_active = true);
+
+drop policy if exists "Admins can insert home slides" on home_slides;
+create policy "Admins can insert home slides"
+  on home_slides for insert
+  with check (
+    exists (select 1 from profiles where id = auth.uid() and is_admin = true)
+  );
+
+drop policy if exists "Admins can update home slides" on home_slides;
+create policy "Admins can update home slides"
+  on home_slides for update
+  using (
+    exists (select 1 from profiles where id = auth.uid() and is_admin = true)
+  );
+
+drop policy if exists "Admins can delete home slides" on home_slides;
+create policy "Admins can delete home slides"
+  on home_slides for delete
+  using (
+    exists (select 1 from profiles where id = auth.uid() and is_admin = true)
+  );
+
+grant select on home_slides to anon, authenticated;
+grant insert, update, delete on home_slides to authenticated;
+
+-- ---------------------------------------------------------
 -- Polls: admin-created, one vote per account per poll.
 -- ---------------------------------------------------------
 
 create table if not exists polls (
   id uuid primary key default gen_random_uuid(),
   question text not null,
+  type text not null default 'A',
+  image_url text,
   created_by uuid references auth.users (id) on delete set null,
   created_at timestamptz not null default now(),
   closed_at timestamptz
 );
 
+-- Ensure columns exist if table was already created
+alter table polls add column if not exists type text not null default 'A';
+alter table polls add column if not exists image_url text;
+alter table polls add column if not exists description text;
+
 create table if not exists poll_options (
   id uuid primary key default gen_random_uuid(),
   poll_id uuid references polls (id) on delete cascade not null,
   label text not null,
+  image_url text,
+  color text,
+  author_id uuid references auth.users (id),
+  is_approved boolean not null default true,
   position integer not null default 0
 );
+
+-- Ensure columns exist if table was already created
+alter table poll_options add column if not exists image_url text;
+alter table poll_options add column if not exists color text;
+alter table poll_options add column if not exists author_id uuid references auth.users (id);
+alter table poll_options add column if not exists is_approved boolean not null default true;
 
 create table if not exists poll_votes (
   id uuid primary key default gen_random_uuid(),
   poll_id uuid references polls (id) on delete cascade not null,
   option_id uuid references poll_options (id) on delete cascade not null,
   voter_id uuid references auth.users (id) on delete cascade not null,
-  created_at timestamptz not null default now(),
-  unique (poll_id, voter_id)
+  is_paid boolean not null default false,
+  created_at timestamptz not null default now()
 );
+
+-- Ensure columns exist if table was already created
+alter table poll_votes add column if not exists is_paid boolean not null default false;
 
 create index if not exists poll_options_poll_idx on poll_options (poll_id);
 create index if not exists poll_votes_poll_idx on poll_votes (poll_id);
+create index if not exists poll_votes_voter_poll_idx on poll_votes (voter_id, poll_id);
 
 alter table polls enable row level security;
+drop policy if exists "Polls are publicly readable" on polls;
 create policy "Polls are publicly readable" on polls for select using (true);
 revoke insert, update, delete on polls from authenticated, anon;
 grant select on polls to anon, authenticated;
 
 alter table poll_options enable row level security;
+drop policy if exists "Poll options are publicly readable" on poll_options;
 create policy "Poll options are publicly readable" on poll_options for select using (true);
 revoke insert, update, delete on poll_options from authenticated, anon;
 grant select on poll_options to anon, authenticated;
 
 alter table poll_votes enable row level security;
+drop policy if exists "Users can view their own votes" on poll_votes;
 create policy "Users can view their own votes" on poll_votes for select using (auth.uid() = voter_id);
 revoke insert, update, delete on poll_votes from authenticated, anon;
 grant select on poll_votes to authenticated;
 
 -- Admin-only: create a poll with 2+ options in one call.
-create or replace function create_poll(p_question text, p_options text[])
+drop function if exists create_poll(text, text[]);
+drop function if exists create_poll(text, jsonb);
+drop function if exists create_poll(text, jsonb, text, text);
+drop function if exists create_poll(text, jsonb, text, text, text);
+
+create or replace function create_poll(p_question text, p_options jsonb, p_type text default 'A', p_image_url text default null, p_description text default null)
 returns uuid
 language plpgsql
 security definer
@@ -1744,9 +2059,8 @@ declare
   am_admin boolean;
   clean_question text := trim(p_question);
   new_poll_id uuid;
-  opt text;
+  opt jsonb;
   idx integer := 0;
-  valid_count integer := 0;
 begin
   if me is null then
     raise exception 'Not authenticated';
@@ -1759,30 +2073,187 @@ begin
     raise exception 'Question is required';
   end if;
 
-  foreach opt in array p_options loop
-    if trim(coalesce(opt, '')) <> '' then
-      valid_count := valid_count + 1;
-    end if;
-  end loop;
-  if valid_count < 2 then
-    raise exception 'A poll needs at least 2 options';
-  end if;
+  insert into polls (question, created_by, type, image_url, description)
+  values (clean_question, me, p_type, p_image_url, p_description)
+  returning id into new_poll_id;
 
-  insert into polls (question, created_by) values (clean_question, me) returning id into new_poll_id;
-
-  foreach opt in array p_options loop
-    if trim(coalesce(opt, '')) <> '' then
-      insert into poll_options (poll_id, label, position) values (new_poll_id, trim(opt), idx);
-      idx := idx + 1;
-    end if;
+  for opt in select * from jsonb_array_elements(p_options) loop
+    insert into poll_options (poll_id, label, image_url, color, position)
+    values (new_poll_id, trim(opt->>'label'), opt->>'image_url', opt->>'color', idx);
+    idx := idx + 1;
   end loop;
 
   return new_poll_id;
 end;
 $$;
 
--- Admin-only: close a poll so it stops accepting votes.
+-- All polls with their options, live vote counts, and which option
+-- the caller voted for TODAY (free vote).
+drop function if exists get_polls();
+create or replace function get_polls()
+returns table(
+  poll_id uuid,
+  question text,
+  poll_description text,
+  poll_type text,
+  poll_image_url text,
+  created_at timestamptz,
+  closed_at timestamptz,
+  option_id uuid,
+  option_label text,
+  option_image_url text,
+  option_color text,
+  is_approved boolean,
+  vote_count bigint,
+  my_option_id uuid
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  me uuid := auth.uid();
+begin
+  return query
+  select
+    p.id as poll_id,
+    p.question,
+    p.description as poll_description,
+    p.type as poll_type,
+    p.image_url as poll_image_url,
+    p.created_at,
+    p.closed_at,
+    o.id as option_id,
+    o.label as option_label,
+    o.image_url as option_image_url,
+    o.color as option_color,
+    o.is_approved,
+    (select count(*) from poll_votes v where v.option_id = o.id)::bigint as vote_count,
+    case when me is null then null else
+      (select v2.option_id from poll_votes v2
+       where v2.poll_id = p.id
+         and v2.voter_id = me
+         and v2.is_paid = false
+         and v2.created_at::date = current_date
+       limit 1)
+    end as my_option_id
+  from polls p
+  join poll_options o on o.poll_id = p.id
+  order by p.created_at desc, o.position asc;
+end;
+$$;
+
+-- User: Submit a custom option for a Type B poll.
+create or replace function submit_poll_option(p_poll_id uuid, p_label text, p_image_url text default null, p_color text default null)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  me uuid := auth.uid();
+  v_type text;
+begin
+  if me is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  select type into v_type from polls where id = p_poll_id;
+  if v_type <> 'B' then
+    raise exception 'This poll does not allow community suggestions';
+  end if;
+
+  insert into poll_options (poll_id, label, image_url, color, author_id, is_approved)
+  values (p_poll_id, trim(p_label), p_image_url, p_color, me, false);
+end;
+$$;
+
+-- User: Join a Weekly Contest (Type W). Costs 10 coins.
+create or replace function join_contest_poll(p_poll_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  me uuid := auth.uid();
+  v_type text;
+  v_username text;
+  v_avatar text;
+  v_coins integer;
+begin
+  if me is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  select type into v_type from polls where id = p_poll_id;
+  if v_type <> 'W' then
+    raise exception 'This is not a contest poll';
+  end if;
+
+  select username, avatar_url, coins into v_username, v_avatar, v_coins from profiles where id = me;
+
+  if v_coins < 10 then
+    raise exception 'You need 10 coins to join';
+  end if;
+
+  if exists (select 1 from poll_options where poll_id = p_poll_id and author_id = me) then
+    raise exception 'You already joined this contest';
+  end if;
+
+  update profiles set coins = coins - 10 where id = me;
+
+  insert into poll_options (poll_id, label, image_url, color, author_id, is_approved)
+  values (p_poll_id, v_username, v_avatar, '#F59E0B', me, true);
+end;
+$$;
+
+-- Admin: Close poll and payout winner (if Weekly Contest).
 create or replace function close_poll(p_poll_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  me uuid := auth.uid();
+  am_admin boolean;
+  v_type text;
+  v_winner_id uuid;
+begin
+  if me is null then
+    raise exception 'Not authenticated';
+  end if;
+  select is_admin into am_admin from profiles where id = me;
+  if not coalesce(am_admin, false) then
+    raise exception 'Only admins can close polls';
+  end if;
+
+  select type into v_type from polls where id = p_poll_id;
+
+  update polls set closed_at = now() where id = p_poll_id and closed_at is null;
+
+  -- Payout logic for Weekly Contest
+  if v_type = 'W' then
+     -- Find the option with most votes
+     select author_id into v_winner_id
+     from poll_options o
+     where o.poll_id = p_poll_id
+     order by (select count(*) from poll_votes v where v.option_id = o.id) desc
+     limit 1;
+
+     if v_winner_id is not null then
+        update profiles set coins = coins + 500 where id = v_winner_id;
+
+        insert into notifications (recipient_id, type, title, body)
+        values (v_winner_id, 'admin_message', '🏆 You won the Weekly Contest!', 'You have been awarded 500 coins.');
+     end if;
+  end if;
+end;
+$$;
+
+-- Admin: Approve a suggested user option.
+create or replace function approve_poll_option(p_option_id uuid)
 returns void
 language plpgsql
 security definer
@@ -1797,14 +2268,15 @@ begin
   end if;
   select is_admin into am_admin from profiles where id = me;
   if not coalesce(am_admin, false) then
-    raise exception 'Only admins can close polls';
+    raise exception 'Only admins can approve options';
   end if;
-  update polls set closed_at = now() where id = p_poll_id and closed_at is null;
+
+  update poll_options set is_approved = true where id = p_option_id;
 end;
 $$;
 
--- Cast a vote. One vote per poll per account — no changing it once cast.
-create or replace function vote_poll(p_option_id uuid)
+-- Admin: Reject / Delete a suggested user option.
+create or replace function reject_poll_option(p_option_id uuid)
 returns void
 language plpgsql
 security definer
@@ -1812,73 +2284,27 @@ set search_path = public
 as $$
 declare
   me uuid := auth.uid();
-  target_poll uuid;
-  is_closed boolean;
+  am_admin boolean;
 begin
   if me is null then
     raise exception 'Not authenticated';
   end if;
-
-  select poll_id into target_poll from poll_options where id = p_option_id;
-  if target_poll is null then
-    raise exception 'Option not found';
+  select is_admin into am_admin from profiles where id = me;
+  if not coalesce(am_admin, false) then
+    raise exception 'Only admins can reject options';
   end if;
 
-  select (closed_at is not null) into is_closed from polls where id = target_poll;
-  if is_closed then
-    raise exception 'This poll is closed';
-  end if;
-
-  if exists (select 1 from poll_votes where poll_id = target_poll and voter_id = me) then
-    raise exception 'You already voted on this poll';
-  end if;
-
-  insert into poll_votes (poll_id, option_id, voter_id) values (target_poll, p_option_id, me);
+  delete from poll_options where id = p_option_id;
 end;
 $$;
 
--- All polls with their options, live vote counts, and which option
--- (if any) the caller voted for. Works for logged-out viewers too.
-create or replace function get_polls()
-returns table(
-  poll_id uuid,
-  question text,
-  created_at timestamptz,
-  closed_at timestamptz,
-  option_id uuid,
-  option_label text,
-  vote_count integer,
-  my_option_id uuid
-)
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  me uuid := auth.uid();
-begin
-  return query
-  select
-    p.id,
-    p.question,
-    p.created_at,
-    p.closed_at,
-    o.id,
-    o.label,
-    (select count(*) from poll_votes v where v.option_id = o.id)::integer,
-    case when me is null then null else
-      (select v2.option_id from poll_votes v2 where v2.poll_id = p.id and v2.voter_id = me)
-    end
-  from polls p
-  join poll_options o on o.poll_id = p.id
-  order by p.created_at desc, o.position asc;
-end;
-$$;
-
-grant execute on function create_poll(text, text[]) to authenticated;
-grant execute on function close_poll(uuid) to authenticated;
-grant execute on function vote_poll(uuid) to authenticated;
+grant execute on function create_poll(text, jsonb, text, text, text) to authenticated;
 grant execute on function get_polls() to anon, authenticated;
+grant execute on function submit_poll_option(uuid, text, text, text) to authenticated;
+grant execute on function join_contest_poll(uuid) to authenticated;
+grant execute on function close_poll(uuid) to authenticated;
+grant execute on function approve_poll_option(uuid) to authenticated;
+grant execute on function reject_poll_option(uuid) to authenticated;
 
 -- ---------------------------------------------------------
 -- Profile likes: unlike thought_likes, repeatable — a person can
@@ -1898,6 +2324,7 @@ create index if not exists profile_likes_target_idx on profile_likes (target_id)
 
 alter table profile_likes enable row level security;
 
+drop policy if exists "Profile likes are publicly readable" on profile_likes;
 create policy "Profile likes are publicly readable"
   on profile_likes for select
   using (true);
@@ -1979,15 +2406,9 @@ $$;
 grant execute on function like_profile(text, boolean) to authenticated;
 grant execute on function get_profile_like_count(text) to anon, authenticated;
 
--- ---------------------------------------------------------
--- Premium page: unlocked by reaching 500 fame, OR by a one-time
--- coin purchase. Once purchased, permanent — doesn't get revoked if
--- fame later matters some other way.
--- ---------------------------------------------------------
 
-alter table profiles add column if not exists premium_unlocked boolean not null default false;
-
-create or replace function unlock_premium()
+-- Grant coins from a direct Google Play purchase.
+create or replace function grant_coins(p_amount integer)
 returns integer
 language plpgsql
 security definer
@@ -1995,31 +2416,22 @@ set search_path = public
 as $$
 declare
   me uuid := auth.uid();
-  unlock_cost constant integer := 50;
-  balance integer;
-  already boolean;
+  new_balance integer;
 begin
   if me is null then
     raise exception 'Not authenticated';
   end if;
 
-  select premium_unlocked, coins into already, balance from profiles where id = me;
-  if already then
-    raise exception 'Already unlocked';
-  end if;
-  if balance is null or balance < unlock_cost then
-    raise exception 'Not enough coins';
-  end if;
-
-  update profiles set coins = coins - unlock_cost, premium_unlocked = true
+  update profiles
+  set coins = coins + p_amount
   where id = me
-  returning coins into balance;
+  returning coins into new_balance;
 
-  return balance;
+  return new_balance;
 end;
 $$;
 
-grant execute on function unlock_premium() to authenticated;
+grant execute on function grant_coins(integer) to authenticated;
 
 -- ---------------------------------------------------------
 -- Rewarded ads: watching one grants either coins or a free spin
@@ -2033,6 +2445,7 @@ alter table profiles add column if not exists ad_free_spins integer not null def
 alter table profiles add column if not exists ad_rewards_today integer not null default 0;
 alter table profiles add column if not exists ad_rewards_date date;
 
+drop function if exists claim_ad_reward(text);
 create or replace function claim_ad_reward(p_reward_type text)
 returns table(new_coins integer, new_free_spins integer)
 language plpgsql
@@ -2087,6 +2500,7 @@ grant execute on function claim_ad_reward(text) to authenticated;
 
 -- Update spin_wheel to consume a free spin (from watching a rewarded
 -- ad) before falling back to spending coins.
+drop function if exists spin_wheel();
 create or replace function spin_wheel()
 returns table(item_type text, new_balance integer, inventory_id uuid)
 language plpgsql
@@ -2133,3 +2547,41 @@ begin
   return query select won_item, balance, new_id;
 end;
 $$;
+
+-- ---------------------------------------------------------
+-- Password management
+-- ---------------------------------------------------------
+
+-- Allow a user to update their own password. This is useful for both
+-- a standard "change password" feature and the final step of a
+-- "forgot password" flow (after the user has logged in via a recovery
+-- link).
+-- Note: To trigger a password reset email from your application, use:
+-- supabase.auth.resetPasswordForEmail(email)
+create or replace function update_password(p_new_password text)
+returns void
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  update auth.users
+  set encrypted_password = extensions.crypt(p_new_password, extensions.gen_salt('bf')),
+      updated_at = now()
+  where id = auth.uid();
+
+  update profiles
+  set last_password_reset = now()
+  where id = auth.uid();
+
+  -- Optional: Notify the user of the change
+  insert into notifications (recipient_id, type, title, body)
+  values (auth.uid(), 'admin_message', 'Password updated', 'Your account password has been changed successfully.');
+end;
+$$;
+
+grant execute on function update_password(text) to authenticated;

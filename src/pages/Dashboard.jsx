@@ -7,8 +7,10 @@ import HeartCard from '../components/HeartCard'
 import UsernameSearchInput from '../components/UsernameSearchInput'
 import MutualMatchOverlay from '../components/MutualMatchOverlay'
 import PetWidget from '../components/PetWidget'
+import HomeSlider from '../components/HomeSlider'
 import { isOnline } from '../lib/presence'
 import { timeAgo } from '../lib/time'
+import { recordEngagementEvent } from '../lib/gamification'
 
 export default function Dashboard() {
   const { profile, refreshProfile } = useAuth()
@@ -80,6 +82,7 @@ export default function Dashboard() {
       } catch (e) {}
 
       await setCrush(clean)
+      recordEngagementEvent(profile?.id, 'send_heart')
       setFormSuccess(myCrush ? `Crush changed to @${clean}.` : `Heart sent to @${clean}.`)
       setTargetUsername('')
       setEditing(false)
@@ -99,11 +102,12 @@ export default function Dashboard() {
   }
 
   // Helper function to dynamically set the heart color based on crush status
+  // Status values come from the get_my_crush RPC: 'purple' | 'green' | 'yellow' | 'pending'
   const getCrushHeartEmoji = (status) => {
     switch (status) {
-      case 'mutual': return '💜'
-      case 'competition': return '💚'
-      case 'pending': return '💛'
+      case 'purple': return '💜'   // mutual match
+      case 'green': return '💚'    // competition (others also chose this crush)
+      case 'yellow': return '💛'   // pending invite (target not registered yet)
       default: return '❤️'
     }
   }
@@ -112,6 +116,8 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-10 space-y-8">
+      <HomeSlider />
+
       {/* Hero Header */}
       <section className="text-center space-y-3">
         <h1 className="font-display text-3xl md:text-4xl font-bold tracking-tight">

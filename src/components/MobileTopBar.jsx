@@ -25,9 +25,48 @@ export default function MobileTopBar({ onMenuClick }) {
         </svg>
       </button>
 
-      {/* Right Side Actions: Messages & Notifications */}
+      {/* Right Side Actions: Search, Whisper Wall, Messages & Notifications */}
       {profile ? (
         <div className="flex items-center gap-1 -mr-1">
+          {/* Global Search Link */}
+          <Link
+            to="/search"
+            className="p-2 text-ink/80 hover:text-ink active:scale-95 rounded-xl transition-all duration-150 hover:bg-white/5 flex items-center justify-center"
+            aria-label="Search"
+          >
+            <svg
+              className="w-5 h-5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <path d="M21 21l-4.35-4.35" />
+            </svg>
+          </Link>
+
+          {/* Whisper Wall Link */}
+          <Link
+            to="/whispers"
+            className="p-2 text-ink/80 hover:text-ink active:scale-95 rounded-xl transition-all duration-150 hover:bg-white/5 flex items-center justify-center"
+            aria-label="Whisper Wall"
+          >
+            <svg
+              className="w-5 h-5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+            </svg>
+          </Link>
+
           {/* Messages Link */}
           <Link
             to="/messages"

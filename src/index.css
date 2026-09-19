@@ -24,87 +24,97 @@
   }
 
   html.light {
-    --color-midnight: #FFF1F6;
-    --color-midnight-surface: #FFF4F8;
-    --color-midnight-border: #FFC0D7;
-    --color-ink: #2F1225;
-    --color-muted: #7B5A6D;
-    --color-heart-purple: #D982B9;
-    --color-heart-green: #58A67D;
-    --color-heart-red: #F06B94;
-    --color-heart-yellow: #F5B4A6;
+    --color-midnight: #F8F9FC;
+    --color-midnight-surface: #FFFFFF;
+    --color-midnight-border: #E2E8F0;
+    --color-ink: #1E293B;
+    --color-muted: #64748B;
+    --color-heart-purple: #8B5CF6;
+    --color-heart-green: #10B981;
+    --color-heart-red: #EF4444;
+    --color-heart-yellow: #F59E0B;
   }
 
   html.light body {
     color: var(--color-ink);
+    background-color: var(--color-midnight);
     background-image:
-      radial-gradient(circle at 18% 14%, rgba(255, 190, 215, 0.3), transparent 22%),
-      radial-gradient(circle at 78% 10%, rgba(255, 152, 194, 0.22), transparent 18%),
-      linear-gradient(180deg, #FFF7FB 0%, #FFEFF5 42%, #FCE6EC 100%);
+      radial-gradient(at 0% 0%, rgba(139, 92, 246, 0.05) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, rgba(239, 68, 68, 0.05) 0px, transparent 50%);
     background-attachment: fixed;
   }
 
   html.light .text-muted {
-    color: #8B6A7D;
+    color: #475569; /* Darker Slate for better readability */
   }
 
   html.light .input-field {
-    border-color: rgba(209, 148, 176, 0.45);
-    color: var(--color-ink);
-    background: #FFF5F9;
+    background-color: #FFFFFF;
+    border-color: #CBD5E1;
+    color: #0F172A;
   }
 
-  html.light .btn-ghost {
-    background: rgba(255, 255, 255, 0.9);
-  }
-
-  html.light .bg-black\/50 {
-    background-color: rgba(255, 255, 255, 0.72) !important;
-  }
-
-  html.light .bg-black\/60 {
-    background-color: rgba(255, 255, 255, 0.78) !important;
-  }
-
-  html.light .bg-black\/70 {
-    background-color: rgba(255, 255, 255, 0.86) !important;
-  }
-
-  html.light .bg-white\/10 {
-    background-color: rgba(255, 255, 255, 0.82) !important;
-  }
-
-  html.light .border-white\/10 {
-    border-color: rgba(255, 255, 255, 0.5) !important;
-  }
-
-  html.light .bg-heart-purple\/15 {
-    background-color: rgba(217, 130, 185, 0.18) !important;
-  }
-
-  html.light .bg-midnight-surface {
-    background-color: var(--color-midnight-surface) !important;
-  }
-
-  html.light .border-midnight-border\/60 {
-    border-color: rgba(255, 198, 218, 0.6) !important;
-  }
-
-  html.light .shadow-glow {
-    box-shadow: 0 18px 40px rgba(190, 125, 170, 0.08);
+  html.light .input-field:focus {
+    border-color: var(--color-heart-purple);
+    background-color: #FFFFFF;
   }
 
   html.light .card {
-    box-shadow: 0 18px 40px rgba(190, 125, 170, 0.09);
+    background-color: #FFFFFF;
+    border-color: #E2E8F0;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
   }
 
-  html.light .btn-primary {
-    background: linear-gradient(135deg, #E17CB8, #D46AAB);
-    color: #FFF1F6;
+  html.light .bg-midnight-surface {
+    background-color: #FFFFFF !important;
   }
 
-  html.light .btn-ghost {
-    background: rgba(255, 255, 255, 0.72);
+  html.light .border-midnight-border {
+    border-color: #E2E8F0 !important;
+  }
+
+  html.light .bg-midnight-card {
+    background-color: #F1F5F9 !important;
+  }
+
+  /* Sidebar Light Mode Overrides */
+  html.light aside {
+    background-color: #FFFFFF !important;
+    border-right-color: #E2E8F0 !important;
+  }
+
+  html.light aside nav p {
+    color: #1E293B !important; /* Make section titles darker */
+    opacity: 1 !important;
+  }
+
+  html.light aside .bg-midnight\/30 {
+    background-color: #F8FAFC !important; /* Light slate for footer */
+  }
+
+  html.light aside .bg-midnight {
+    background-color: #FFFFFF !important; /* White for user card */
+    border-color: #E2E8F0 !important;
+  }
+
+  html.light aside .hover\:bg-midnight:hover {
+    background-color: #F1F5F9 !important;
+  }
+
+  /* Keyboard Overlap Fix */
+  body.keyboard-is-visible nav.fixed.inset-x-0 {
+    display: none !important;
+  }
+
+  /* Spin Reward Modal Fixes for Light Mode */
+  html.light .bg-slate-900\/90 {
+    background-color: #1E293B !important; /* Keep reward modal dark even in light mode for "pop" */
+  }
+  html.light .text-white {
+    color: #FFFFFF !important;
+  }
+  html.light .text-slate-300 {
+    color: #CBD5E1 !important;
   }
 
   html.dark body {
@@ -187,12 +197,17 @@
     bottom: var(--banner-height, 0px);
   }
 
-  .pb-with-banner {
-    padding-bottom: calc(5rem + var(--banner-height, 0px));
+  .pb-banner {
+    padding-bottom: var(--banner-height, 0px) !important;
   }
+
+  .pb-with-banner {
+    padding-bottom: calc(5rem + var(--banner-height, 0px)) !important;
+  }
+
   @screen lg {
     .pb-with-banner {
-      padding-bottom: 0px;
+      padding-bottom: 0px !important;
     }
   }
 }

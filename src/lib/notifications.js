@@ -1,3 +1,5 @@
+import { Capacitor } from '@capacitor/core'
+import { PushNotifications } from '@capacitor/push-notifications'
 import { supabase } from '../supabaseClient'
 
 /**
@@ -41,14 +43,76 @@ export async function sendPersonalNotification(targetUsername, title, body) {
 }
 
 /**
- * Admin-only: post an announcement AND notify all users automatically.
+ * Admin-only: post an announcement. Any @username mentions in the
+ * body that match real accounts get notified automatically.
  */
-export async function postAnnouncement(title, body, imageUrl = null, linkUrl = null) {
+export async function postAnnouncement(title, body) {
   const { error } = await supabase.rpc('post_announcement', {
     p_title: title.trim(),
     p_body: body.trim(),
-    p_image_url: imageUrl,
-    p_link_url: linkUrl,
   })
+  if (error) throw error
+}
+
+// ---------------------------------------------------------------
+// Push notifications (Firebase Cloud Messaging via Capacitor)
+// ---------------------------------------------------------------
+
+let listenersAttached = false
+
+/**
+ * Request push permission and register this device.
+ */
+export async function setupPhoneNotifications(userId) {
+  if (!Capacitor.isNativePlatform() || !userId) return
+
+  let permStatus = await PushNotifications.checkPermissions()
+
+  if (permStatus.receive === 'prompt') {
+    permStatus = await PushNotifications.requestPermissions()
+  }
+
+  if (permStatus.receive !== 'granted') {
+    return
+  }
+
+  if (!listenersAttached) {
+    listenersAttached = true
+
+    PushNotifications.addListener('registration', (token) => {
+      savePushToken(userId, token.value).catch((err) => {
+        console.error('Could not save push token:', err)
+      })
+    })
+
+    PushNotifications.addListener('registrationError', (err) => {
+      console.error('Push registration error:', err)
+    })
+
+    PushNotifications.addListener('pushNotificationReceived', () => {
+    })
+
+    PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+      const link = action.notification?.data?.link
+      if (link) {
+        window.location.href = link
+      }
+    })
+  }
+
+  await PushNotifications.register()
+}
+
+async function savePushToken(userId, token) {
+  const platform = Capacitor.getPlatform()
+  const { error } = await supabase.from('push_tokens').upsert(
+    {
+      user_id: userId,
+      token,
+      platform,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'token' }
+  )
   if (error) throw error
 }

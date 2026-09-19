@@ -1,0 +1,44 @@
+GOOGLE PLAY QUESTIONNAIRE: TAILORED ANSWERS FOR CRUSH COUNTER
+-------------------------------------------------------
+
+Part 1: Tell us about your closed test
+--------------------------------------
+- How did you recruit testers?
+"I recruited a diverse group of 20+ testers through local social media communities and among university students. I ensured that all testers were over the age of 18 and had a genuine interest in social networking and anonymous interaction apps."
+
+- How did you engage with your testers?
+"Testers were instructed to use the app daily for at least 14 consecutive days. I communicated with them via a dedicated feedback group where I provided specific tasks, such as sending a heart, posting on the Whisper Wall, and testing the gifting system. I actively monitored backend logs to ensure consistent engagement."
+
+- What feedback did you receive from testers?
+"Testers praised the new Messenger-style UI and the interactive Whisper Wall. They identified a critical issue with the registration flow (versionCode conflicts) and some image loading delays. We also received feedback about the chat input being covered by the keyboard on certain Android models."
+
+- What changes did you make based on feedback?
+"Based on tester feedback, we implemented a robust 'Cache-Busting' system for profile pictures, fixed the 'AdjustResize' logic for the keyboard to prevent UI overlap, and overhauled the profile completion flow to be much smoother. We also optimized the AdMob banner placement so it no longer interferes with the user interface."
+
+
+Part 2: Tell us about your app/game
+-----------------------------------
+- What is the main purpose of your app?
+"Crush Counter is a social engagement platform designed to help users express interest in others anonymously. Its primary goal is to foster meaningful connections through a 'Mutual Match' system, while providing a safe community space for anonymous confessions and social gaming."
+
+- Who is your target audience?
+"The app is strictly for adults (18+) who are looking for a low-pressure, gamified social experience. It appeals to users who value privacy but still want to engage with their local community."
+
+- What are the key features?
+"Key features include:
+1. Mutual Crush Matching (identity stays hidden until both parties choose each other).
+2. Whisper Wall: An X-style anonymous community thread for sharing thoughts.
+3. Interactive Friend System: Facebook-style friend management and discovery.
+4. Social Gamification: Virtual gifting, Fame Tiers with visual auras, and a virtual pet widget."
+
+
+Part 3: Tell us about your production readiness
+-----------------------------------------------
+- Why is your app ready for production?
+"After 14 days of intensive closed testing, all reported bugs have been resolved. The app’s backend (Supabase) is fully optimized with secure RLS policies, and the frontend has been refined for high stability on a wide range of Android devices. All core social and monetization features are complete and functional."
+
+- Describe your app's stability and performance.
+"The app has a near-zero crash rate in our testing environment. We have implemented code shrinking and resource optimization (R8) to ensure a small APK size and fast loading times. Image loading is now optimized with fallback mechanisms to ensure a smooth experience even on slower networks."
+
+- How have you ensured AdMob compliance?
+"AdMob integration follows all Google Play policies. Banners are positioned to avoid accidental clicks, and Interstitial ads respect a 5-minute cooldown to ensure they do not disrupt the user experience. Ads are only served after proper SDK initialization."

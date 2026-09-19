@@ -164,3 +164,12 @@ export async function usePetMedicine(itemId) {
   if (error) throw error
   return data?.[0] ?? null
 }
+
+/**
+ * Use a 'mysterybox' item.
+ */
+export async function useMysteryBox(itemId) {
+  const { data, error } = await supabase.rpc('use_mystery_box', { p_item_id: itemId })
+  if (error) throw error
+  return data?.[0] ?? null
+}

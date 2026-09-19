@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { getMyMissions, claimMission, getMyReferralStats } from '../lib/missions'
 import { getInviteLink } from '../lib/invite'
+import EngagementProgress from '../components/EngagementProgress'
+import { recordEngagementEvent } from '../lib/gamification'
 
 export default function Missions() {
   const { profile, refreshProfile } = useAuth()
@@ -14,6 +16,7 @@ export default function Missions() {
 
   const [referralStats, setReferralStats] = useState({ invited_count: 0 })
   const [copied, setCopied] = useState(false)
+  const [engagementVersion, setEngagementVersion] = useState(0)
 
   const inviteLink = getInviteLink(profile?.username)
 
@@ -39,6 +42,8 @@ export default function Missions() {
     try {
       const mission = missions.find((m) => m.mission_key === missionKey)
       await claimMission(missionKey)
+      recordEngagementEvent(profile?.id, 'claim_mission')
+      setEngagementVersion((version) => version + 1)
       const rewardText = [
         mission?.reward_coins ? `+${mission.reward_coins} 🪙` : null,
         mission?.reward_fame ? `+${mission.reward_fame} 🌟` : null,
@@ -80,8 +85,8 @@ export default function Missions() {
     }
   }
 
-  const dailyMissions = missions.filter((m) => m.period === 'daily')
-  const weeklyMissions = missions.filter((m) => m.period === 'weekly')
+  const dailyMissions = missions.filter((m) => m.period === 'daily' && !m.mission_key.includes('spin'))
+  const weeklyMissions = missions.filter((m) => m.period === 'weekly' && !m.mission_key.includes('spin'))
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-10 space-y-8">
@@ -147,6 +152,8 @@ export default function Missions() {
           <span>📤</span> Share Invite Link
         </button>
       </section>
+
+      <EngagementProgress userId={profile?.id} refreshToken={engagementVersion} />
 
       {/* Missions List / Loading Skeleton */}
       {loading ? (

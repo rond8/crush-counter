@@ -10,6 +10,10 @@ const FAQ_CATEGORIES = [
         q: 'How do I delete my account?',
         a: 'Go to Settings (tap your username in the menu, then Settings) and use the "Delete my account" option in the Danger Zone. This permanently removes your profile, crush, messages, matches, and photo — it cannot be undone.',
       },
+       {
+        q: 'How to earn Fame points?',
+        a: 'through likes,gift and items',
+      },
       {
         q: 'Someone is harassing me. What can I do?',
         a: 'Use the "Report" button on their profile or on a specific message. Reports go straight to the developer for review.',

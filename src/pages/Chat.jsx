@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { isMutualMatch, sendDirectMessage, getConversation } from '../lib/directMessages'
+import { getRelationshipStatus, getFriendLevel } from '../lib/friends'
 import { timeAgo } from '../lib/time'
+import ImageModal from '../components/ImageModal'
 
 const BODY_MAX = 1000
 
@@ -10,20 +12,38 @@ export default function Chat() {
   const [allowed, setAllowed] = useState(null)
   const [messages, setMessages] = useState([])
   const [loading, setLoading] = useState(true)
+  const [relationship, setRelationship] = useState({ status: 'none', points: 0 })
 
   const [body, setBody] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
 
+  const [viewingImage, setViewImage] = useState(null)
+
   const scrollContainerRef = useRef(null)
   const bottomRef = useRef(null)
 
   const refresh = useCallback(async () => {
-    const mutual = await isMutualMatch(username)
-    setAllowed(mutual)
-    if (mutual) {
-      const convo = await getConversation(username)
-      setMessages(convo || [])
+    try {
+      const { data: targetProfile } = await supabase.from('profiles').select('id').eq('username', username.toLowerCase()).maybeSingle()
+      let currentRelStatus = 'none'
+
+      if (targetProfile) {
+        const rel = await getRelationshipStatus(targetProfile.id)
+        setRelationship(rel)
+        currentRelStatus = rel.status
+      }
+
+      const mutual = await isMutualMatch(username)
+      const canChat = mutual || (currentRelStatus === 'friends')
+      setAllowed(canChat)
+
+      if (canChat) {
+        const convo = await getConversation(username)
+        setMessages(convo || [])
+      }
+    } catch (err) {
+      console.error('Refresh error:', err)
     }
   }, [username])
 
@@ -32,7 +52,6 @@ export default function Chat() {
     refresh().finally(() => setLoading(false))
   }, [refresh])
 
-  // Scroll to bottom when messages update
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
@@ -56,150 +75,180 @@ export default function Chat() {
 
   if (loading) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-20 text-center space-y-3">
-        <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-purple-500 border-t-transparent" />
-        <p className="text-muted text-xs font-mono">Loading conversation...</p>
+      <div className="flex-1 flex flex-col items-center justify-center p-10 space-y-4">
+        <div className="w-10 h-10 border-4 border-heart-purple/20 border-t-heart-purple rounded-full animate-spin" />
+        <p className="text-muted text-xs font-medium tracking-wide">Securing connection...</p>
       </div>
     )
   }
 
   if (!allowed) {
     return (
-      <div className="max-w-md mx-auto px-6 py-20 text-center space-y-4">
-        <div className="w-16 h-16 bg-purple-500/10 border border-purple-500/20 rounded-full flex items-center justify-center mx-auto text-2xl shadow-inner">
-          🔒
+      <div className="flex-1 flex items-center justify-center p-6">
+        <div className="max-w-xs w-full text-center space-y-6">
+          <div className="w-20 h-20 bg-heart-purple/10 rounded-full flex items-center justify-center mx-auto text-3xl">🔒</div>
+          <div className="space-y-2">
+            <h2 className="text-2xl font-display font-bold">Encrypted Chat</h2>
+            <p className="text-sm text-muted">You can only chat with mutual matches. Keep exploring to find yours!</p>
+          </div>
+          <Link to="/dashboard" className="btn-primary w-full">Back to Dashboard</Link>
         </div>
-        <div className="space-y-1">
-          <h1 className="font-display text-2xl font-bold text-ink">Chat Locked</h1>
-          <p className="text-muted text-xs sm:text-sm max-w-sm mx-auto">
-            Direct messages are reserved for mutual matches. Head to the dashboard to discover your crushes!
-          </p>
-        </div>
-        <Link to="/dashboard" className="btn-primary inline-flex text-xs font-semibold px-6 py-2.5 rounded-xl shadow-lg">
-          Go to Dashboard 🚀
-        </Link>
       </div>
     )
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6 flex flex-col h-[calc(100vh-6rem)]">
-      {/* Top Header */}
-      <div className="flex items-center justify-between pb-4 border-b border-white/10 bg-slate-900/40 backdrop-blur-md rounded-t-2xl px-4 py-3">
+    <div className="fixed inset-0 z-40 flex flex-col bg-midnight lg:static lg:h-[calc(100vh-2rem)]">
+      {/* Messenger Header */}
+      <header className="shrink-0 z-20 bg-midnight-surface/80 backdrop-blur-xl border-b border-midnight-border px-4 py-3 flex items-center justify-between safe-area-top">
         <div className="flex items-center gap-3">
-          <Link
-            to="/dashboard"
-            className="text-muted hover:text-white transition-colors text-sm font-semibold pr-1"
-            title="Back"
-          >
-            ←
+          <Link to="/messages" className="p-2 -ml-2 text-muted hover:text-ink transition-colors">
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
           </Link>
-
-          {/* User Avatar Placeholder */}
-          <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-purple-600 to-pink-500 flex items-center justify-center text-white text-xs font-bold font-mono uppercase shadow-md">
-            {username.slice(0, 2)}
-          </div>
-
-          <div>
-            <Link
-              to={`/u/${username}`}
-              className="font-display text-sm font-bold text-ink hover:text-purple-300 transition-colors block leading-tight"
-            >
-              @{username}
-            </Link>
-            <span className="text-[10px] text-purple-400 font-medium flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
-              Mutual Match
-            </span>
-          </div>
-        </div>
-
-        <Link
-          to={`/u/${username}`}
-          className="text-xs text-muted hover:text-white bg-white/5 border border-white/10 px-3 py-1.5 rounded-lg transition-colors font-mono"
-        >
-          View Profile
-        </Link>
-      </div>
-
-      {/* Messages Scroll Area */}
-      <div
-        ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto space-y-3 p-4 bg-slate-950/40 border-x border-white/5 shadow-inner"
-      >
-        {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center space-y-2 text-muted">
-            <span className="text-3xl">✨</span>
-            <p className="text-xs max-w-xs">
-              You both matched! Start the conversation by sending a message below.
-            </p>
-          </div>
-        ) : (
-          messages.map((m) => (
-            <div
-              key={m.id}
-              className={`flex flex-col ${m.is_mine ? 'items-end' : 'items-start'} space-y-1`}
-            >
-              <div
-                className={`max-w-[80%] sm:max-w-[70%] rounded-2xl px-4 py-2.5 text-xs sm:text-sm shadow-md transition-all ${
-                  m.is_mine
-                    ? 'bg-purple-600 text-white rounded-tr-xs border border-purple-500/40'
-                    : 'bg-slate-800 text-ink border border-white/10 rounded-tl-xs'
-                }`}
-              >
-                <p className="whitespace-pre-wrap leading-relaxed">{m.body}</p>
-                <p
-                  className={`text-[9px] font-mono mt-1 text-right ${
-                    m.is_mine ? 'text-purple-200/70' : 'text-muted/60'
-                  }`}
-                >
-                  {timeAgo(m.created_at)}
-                </p>
+          <Link to={`/u/${username}`} className="flex items-center gap-3 group">
+            <div className="relative">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-heart-purple to-heart-red flex items-center justify-center text-white font-bold text-sm shadow-lg ring-2 ring-midnight">
+                {username.slice(0, 2).toUpperCase()}
+              </div>
+              <div className="absolute -bottom-1 -right-1">
+                {relationship.status === 'friends' && (
+                  <div
+                    className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-lg border-2 border-midnight"
+                    style={{ backgroundColor: getFriendLevel(relationship.points).color }}
+                    title={`${getFriendLevel(relationship.points).label} (Lv.${getFriendLevel(relationship.points).lv})`}
+                  >
+                    {getFriendLevel(relationship.points).lv}
+                  </div>
+                )}
               </div>
             </div>
-          ))
+            <div>
+              <h1 className="text-sm font-bold text-ink group-hover:text-heart-purple transition-colors leading-none flex items-center gap-1.5">
+                @{username}
+                {relationship.status === 'friends' && (
+                  <span className="text-[8px] bg-white/10 px-1.5 py-0.5 rounded-full text-muted uppercase tracking-tighter group-hover:text-heart-purple transition-colors">
+                    {getFriendLevel(relationship.points).label}
+                  </span>
+                )}
+              </h1>
+              <p className="text-[10px] text-muted mt-1 font-medium flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-heart-purple animate-pulse" />
+                Active now
+              </p>
+            </div>
+          </Link>
+        </div>
+        <div className="flex items-center gap-1">
+          <button className="p-2 text-muted hover:text-heart-purple transition-colors">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+          </button>
+          <button className="p-2 text-muted hover:text-heart-purple transition-colors">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" /></svg>
+          </button>
+        </div>
+      </header>
+
+      {/* Chat Canvas */}
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto px-4 py-6 space-y-4 scroll-smooth bg-[url('/images/chat-bg.png')] bg-repeat bg-fixed opacity-95"
+      >
+        {messages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center min-h-full text-center space-y-4 py-10">
+            <div className="w-20 h-20 rounded-full bg-heart-purple/5 flex items-center justify-center text-4xl">👋</div>
+            <div className="space-y-1">
+              <p className="text-ink font-bold">Say hi to @{username}!</p>
+              <p className="text-[11px] text-muted max-w-[200px] mx-auto">You matched! Start the conversation to get to know each other better.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            {messages.map((m, idx) => {
+              const isMine = m.is_mine;
+              const prevMsg = messages[idx - 1];
+              const showTime = !prevMsg || (new Date(m.created_at) - new Date(prevMsg.created_at) > 300000);
+
+              return (
+                <div key={m.id} className={`flex flex-col ${isMine ? 'items-end' : 'items-start'}`}>
+                  {showTime && (
+                    <span className="w-full text-center text-[10px] text-muted/60 my-4 font-bold tracking-widest uppercase">
+                      {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+
+                  <div className={`group relative max-w-[85%] sm:max-w-[75%] px-4 py-2.5 shadow-sm transition-all duration-200
+                    ${isMine
+                      ? 'bg-heart-purple text-white rounded-2xl rounded-tr-none'
+                      : 'bg-midnight-surface text-ink rounded-2xl rounded-tl-none border border-midnight-border'
+                    }`}
+                  >
+                    <p className="text-[13px] leading-relaxed whitespace-pre-wrap">{m.body}</p>
+
+                    {/* Tiny Status indicator for my messages */}
+                    {isMine && idx === messages.length - 1 && (
+                      <span className="absolute -bottom-4 right-0 text-[9px] text-heart-purple font-bold">Sent</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
         <div ref={bottomRef} />
       </div>
 
-      {/* Message Input Box */}
-      <div className="pt-3 bg-slate-900/60 backdrop-blur-md border-t border-white/10 rounded-b-2xl p-3">
-        <form onSubmit={handleSend} className="space-y-2">
-          <div className="relative flex items-end gap-2 bg-white/5 border border-white/10 rounded-xl p-2 focus-within:border-purple-500 transition-colors">
+      {/* Messenger Input Bar */}
+      <div
+        className="shrink-0 p-4 bg-midnight-surface/90 backdrop-blur-xl border-t border-midnight-border safe-area-bottom pb-banner"
+        style={{ paddingBottom: 'calc(var(--safe-area-inset-bottom, 0px) + var(--banner-height, 0px) + 1rem)' }}
+      >
+        <form onSubmit={handleSend} className="flex items-end gap-2 max-w-4xl mx-auto">
+          <button type="button" className="p-2.5 text-heart-purple hover:bg-heart-purple/10 rounded-full transition-colors shrink-0">
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          </button>
+
+          <div className="flex-1 bg-midnight border border-midnight-border rounded-3xl px-4 py-1.5 focus-within:ring-2 ring-heart-purple/20 transition-all flex items-end">
             <textarea
               rows={1}
               maxLength={BODY_MAX}
-              placeholder={`Message @${username}...`}
-              className="w-full text-xs sm:text-sm bg-transparent text-ink focus:outline-none resize-none px-2 py-1.5 max-h-32"
+              placeholder="Aa"
+              className="flex-1 bg-transparent text-ink text-sm py-2 focus:outline-none resize-none max-h-32"
               value={body}
-              onChange={(e) => setBody(e.target.value)}
+              onChange={(e) => {
+                setBody(e.target.value);
+                e.target.style.height = 'auto';
+                e.target.style.height = e.target.scrollHeight + 'px';
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault()
-                  handleSend(e)
+                  e.preventDefault();
+                  handleSend(e);
                 }
               }}
             />
-
-            <button
-              type="submit"
-              disabled={sending || !body.trim()}
-              className="btn-primary !px-4 !py-2 text-xs font-semibold rounded-lg flex items-center justify-center shrink-0 disabled:opacity-40 transition-all"
-            >
-              {sending ? '...' : 'Send 🚀'}
+            <button type="button" className="p-2 text-heart-purple hover:text-heart-red transition-colors shrink-0">
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" /></svg>
             </button>
           </div>
 
-          <div className="flex items-center justify-between text-[10px] text-muted/60 px-1 font-mono">
-            <span>Press Enter to send, Shift+Enter for new line</span>
-            <span>
-              {body.length}/{BODY_MAX}
-            </span>
-          </div>
+          <button
+            type="submit"
+            disabled={sending || !body.trim()}
+            className={`w-12 h-12 rounded-full transition-all shrink-0 shadow-lg flex items-center justify-center
+              ${body.trim()
+                ? 'bg-heart-purple text-white hover:scale-105 active:scale-95'
+                : 'bg-midnight-border text-muted opacity-50'
+              }`}
+          >
+            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20" style={{ transform: 'rotate(90deg) translateY(1px)' }}><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" /></svg>
+          </button>
         </form>
-
-        {error && <p className="text-rose-400 text-xs text-center mt-2 font-medium">{error}</p>}
+        {error && <p className="text-[10px] text-heart-red text-center mt-2 font-bold">{error}</p>}
       </div>
+
+      {viewingImage && (
+        <ImageModal src={viewingImage} onClose={() => setViewImage(null)} />
+      )}
     </div>
   )
 }

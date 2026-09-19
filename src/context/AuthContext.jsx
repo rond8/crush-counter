@@ -3,10 +3,10 @@ import { supabase } from '../supabaseClient'
 import { touchLastSeen } from '../lib/presence'
 import { claimDailyCoins } from '../lib/game'
 import { checkNewAdmirers } from '../lib/crush'
-import { getUnreadNotificationCount } from '../lib/notifications'
-import { maybeShowLaunchAd } from '../lib/ads'
-import { initPurchases } from '../lib/purchases'
+import { getUnreadNotificationCount, setupPhoneNotifications } from '../lib/notifications'
+import { maybeShowLaunchAd, preloadLaunchAd } from '../lib/ads'
 import { claimReferral, PENDING_REFERRAL_STORAGE_KEY } from '../lib/missions'
+import { recordEngagementEvent } from '../lib/gamification'
 
 const HEARTBEAT_INTERVAL_MS = 45 * 1000
 const ADMIRER_POLL_INTERVAL_MS = 60 * 1000
@@ -28,35 +28,57 @@ export function AuthProvider({ children }) {
     }
     const { data, error } = await supabase
       .from('profiles')
-      .select(
-        'id, username, display_name, is_admin, avatar_url, gender, relationship_status, age, location, bio, coins, fame, leaderboard_opt_in, premium_unlocked, ad_free_spins, is_verified'
-      )
+      .select('*')
       .eq('id', userId)
       .maybeSingle()
-    if (!error) setProfile(data)
+    if (error) {
+      console.error('Error loading profile:', error)
+      return
+    }
+    setProfile(data)
   }, [])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       loadProfile(session?.user?.id).finally(() => setLoading(false))
-      if (session?.user?.id) initPurchases(session.user.id)
+      if (session?.user?.id) recordEngagementEvent(session.user.id, 'login')
     })
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
       loadProfile(session?.user?.id)
-      if (session?.user?.id) initPurchases(session.user.id)
+      if (session?.user?.id) recordEngagementEvent(session.user.id, 'login')
     })
 
     return () => listener.subscription.unsubscribe()
   }, [loadProfile])
 
-  // Keep last_seen fresh while the app is open
+  // AUTO-SHOW LAUNCH AD: When profile is ready and user is not premium
+  useEffect(() => {
+    if (!loading && profile) {
+      const isPremium = (profile.fame ?? 0) >= 5000 || Boolean(profile.premium_unlocked)
+      if (!isPremium) {
+        // First preload it
+        preloadLaunchAd().then(() => {
+           // Then show it (respects internal cooldown)
+           maybeShowLaunchAd(isPremium)
+        })
+      }
+    }
+  }, [loading, !!profile])
+
+  // Setup Phone Push Notifications
   useEffect(() => {
     const userId = session?.user?.id
     if (!userId) return
+    setupPhoneNotifications(userId).catch(() => {})
+  }, [session?.user?.id])
 
+  // Keep last_seen fresh
+  useEffect(() => {
+    const userId = session?.user?.id
+    if (!userId) return
     const beat = () => {
       if (document.visibilityState === 'visible') {
         touchLastSeen(userId).catch(() => {})
@@ -65,7 +87,6 @@ export function AuthProvider({ children }) {
     beat()
     const interval = setInterval(beat, HEARTBEAT_INTERVAL_MS)
     document.addEventListener('visibilitychange', beat)
-
     return () => {
       clearInterval(interval)
       document.removeEventListener('visibilitychange', beat)
@@ -90,14 +111,11 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const userId = session?.user?.id
     if (!userId) return
-
     const check = () => {
       if (document.visibilityState !== 'visible') return
       checkNewAdmirers()
         .then((result) => {
-          if (result.has_new) {
-            setNewAdmirer(result)
-          }
+          if (result.has_new) setNewAdmirer(result)
         })
         .catch(() => {})
       getUnreadNotificationCount()
@@ -107,7 +125,6 @@ export function AuthProvider({ children }) {
     check()
     const interval = setInterval(check, ADMIRER_POLL_INTERVAL_MS)
     document.addEventListener('visibilitychange', check)
-
     return () => {
       clearInterval(interval)
       document.removeEventListener('visibilitychange', check)
@@ -119,36 +136,21 @@ export function AuthProvider({ children }) {
     const userId = session?.user?.id
     if (!userId) return
     let pending
-    try {
-      pending = localStorage.getItem(PENDING_REFERRAL_STORAGE_KEY)
-    } catch {
-      return
-    }
+    try { pending = localStorage.getItem(PENDING_REFERRAL_STORAGE_KEY) } catch { return }
     if (!pending) return
     claimReferral(pending).finally(() => {
-      try {
-        localStorage.removeItem(PENDING_REFERRAL_STORAGE_KEY)
-      } catch {}
+      try { localStorage.removeItem(PENDING_REFERRAL_STORAGE_KEY) } catch {}
     })
   }, [session?.user?.id])
 
-  const signUp = async ({ email, password, username, displayName, age }) => {
+  const signUp = async ({ email, password, username, displayName, age, birthday }) => {
     const cleanUsername = username.trim().toLowerCase()
-
-    // Pass metadata into auth signup as well so database triggers can pick it up
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        data: {
-          username: cleanUsername,
-          age: age ?? null,
-        },
-      },
+      options: { data: { username: cleanUsername, age: age ?? null, birthday: birthday ?? null } },
     })
     if (error) throw error
-
-    // Only update profiles table if a user object was returned and session exists
     if (data.user && data.session) {
       const { error: profileError } = await supabase.from('profiles').upsert(
         {
@@ -156,14 +158,11 @@ export function AuthProvider({ children }) {
           username: cleanUsername,
           display_name: displayName?.trim() || cleanUsername,
           age: age ?? null,
+          birthday: birthday ?? null,
         },
         { onConflict: 'id' }
       )
-
-      // Ignore non-fatal RLS error if trigger already handled creation
-      if (profileError && !profileError.message.includes('permission denied')) {
-        throw profileError
-      }
+      if (profileError && !profileError.message.includes('permission denied')) throw profileError
     }
     return data
   }
@@ -171,18 +170,7 @@ export function AuthProvider({ children }) {
   const signIn = async ({ email, password }) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
-
-    const userId = data.user?.id
-    if (userId) {
-      const { data: prof } = await supabase
-        .from('profiles')
-        .select('fame, premium_unlocked')
-        .eq('id', userId)
-        .maybeSingle()
-      const isPremium = (prof?.fame ?? 0) >= 500 || Boolean(prof?.premium_unlocked)
-      if (!isPremium) maybeShowLaunchAd()
-    }
-
+    // Ad showing is now handled by the global useEffect [loading, profile]
     return data
   }
 
@@ -196,10 +184,8 @@ export function AuthProvider({ children }) {
     user: session?.user ?? null,
     profile,
     loading,
-    // True once we know for sure: there's an authenticated session but
-    // no matching profiles row yet (e.g. just completed Google OAuth
-    // for the first time, which never collects a username).
-    profileIncomplete: !loading && Boolean(session) && !profile,
+    isVerified: Boolean(session?.user?.email_confirmed_at),
+    profileIncomplete: !loading && Boolean(session) && (!profile || !profile.username),
     signUp,
     signIn,
     signOut,

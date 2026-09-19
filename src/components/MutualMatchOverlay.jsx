@@ -1,4 +1,5 @@
 import React from 'react'
+import { Link } from 'react-router-dom'
 
 const DEFAULT_PURPLE_HEART = '/images/hearts/purple.png'
 
@@ -109,6 +110,14 @@ export default function MutualMatchOverlay({ matches = [], myCrush, onClose, onA
               Send Message
             </button>
           )}
+
+          <Link
+            to="/purple-heart"
+            onClick={onClose}
+            className="w-full py-3 px-4 rounded-xl bg-heart-purple/20 hover:bg-heart-purple/30 text-purple-100 font-semibold text-sm transition-all border border-heart-purple/30"
+          >
+            Open Shared Purple Heart
+          </Link>
 
           <button
             onClick={onClose}

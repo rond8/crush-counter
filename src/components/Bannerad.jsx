@@ -13,7 +13,7 @@ import { showBanner, removeBanner } from '../lib/ads'
  */
 export default function BannerAd() {
   const { profile } = useAuth()
-  const isPremium = (profile?.fame ?? 0) >= 500 || Boolean(profile?.premium_unlocked)
+  const isPremium = (profile?.fame ?? 0) >= 5000 || Boolean(profile?.premium_unlocked)
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform() || isPremium) {

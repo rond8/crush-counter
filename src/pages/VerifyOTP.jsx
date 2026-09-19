@@ -1,13 +1,14 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { verifyEmailOTP, resendVerification } from '../lib/auth'
+import { verifyOTP, resendVerification } from '../lib/auth'
 
 export default function VerifyOTP() {
   const navigate = useNavigate()
   const location = useLocation()
   
-  // Retrieve email passed from Register/Login page state
+  // Retrieve info passed from Register/Login page state
   const email = location.state?.email || ''
+  const type = location.state?.type || 'signup' // 'signup' or 'email' (for login)
 
   const [otp, setOtp] = useState(['', '', '', '', '', ''])
   const [loading, setLoading] = useState(false)
@@ -25,28 +26,24 @@ export default function VerifyOTP() {
     return () => clearInterval(timer)
   }, [cooldown])
 
-  // Handle key entry & auto-advance
   const handleChange = (index, value) => {
-    if (!/^\d*$/.test(value)) return // Numbers only
+    if (!/^\d*$/.test(value)) return
 
     const newOtp = [...otp]
-    newOtp[index] = value.slice(-1) // Take last typed digit
+    newOtp[index] = value.slice(-1)
     setOtp(newOtp)
 
-    // Auto-focus next input
     if (value && index < 5) {
       inputRefs.current[index + 1]?.focus()
     }
   }
 
-  // Handle backspace navigation
   const handleKeyDown = (index, e) => {
     if (e.key === 'Backspace' && !otp[index] && index > 0) {
       inputRefs.current[index - 1]?.focus()
     }
   }
 
-  // Handle pasting full 6-digit code
   const handlePaste = (e) => {
     e.preventDefault()
     const pastedData = e.clipboardData.getData('text').trim()
@@ -58,19 +55,16 @@ export default function VerifyOTP() {
   }
 
   const handleVerify = async (e) => {
-    e.preventDefault()
+    if (e) e.preventDefault()
     setError('')
     setSuccess('')
 
     const code = otp.join('')
-    if (code.length !== 6) {
-      setError('Please enter all 6 digits.')
-      return
-    }
+    if (code.length !== 6) return setError('Please enter all 6 digits.')
 
     setLoading(true)
     try {
-      await verifyEmailOTP(email, code)
+      await verifyOTP(email, code, type)
       setSuccess('Verified successfully! Redirecting…')
       setTimeout(() => navigate('/dashboard'), 1200)
     } catch (err) {
@@ -80,6 +74,13 @@ export default function VerifyOTP() {
     }
   }
 
+  // Auto-submit when all digits filled
+  useEffect(() => {
+    if (otp.join('').length === 6 && !loading && !success) {
+      handleVerify()
+    }
+  }, [otp])
+
   const handleResend = async () => {
     if (cooldown > 0 || resending) return
     setError('')
@@ -87,7 +88,7 @@ export default function VerifyOTP() {
     setResending(true)
 
     try {
-      await resendVerification(email)
+      await resendVerification(email, type)
       setSuccess('A new verification code has been sent!')
       setCooldown(60)
     } catch (err) {
@@ -99,17 +100,17 @@ export default function VerifyOTP() {
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-4">
-      <div className="w-full max-w-md card p-8 bg-slate-900/90 border border-white/10 rounded-2xl shadow-2xl space-y-6 text-center">
+      <div className="w-full max-w-sm card p-8 text-center border-midnight-border shadow-2xl space-y-6">
         <div>
-          <div className="text-4xl mb-2">🔐</div>
-          <h1 className="font-display text-2xl font-bold text-white">Enter Verification Code</h1>
-          <p className="text-xs text-muted mt-1">
-            We sent a 6-digit code to <span className="text-purple-300 font-semibold">{email || 'your email'}</span>.
+          <div className="w-16 h-16 bg-heart-purple/10 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">🔐</div>
+          <h1 className="font-display text-2xl font-black text-ink italic">Verify Email</h1>
+          <p className="text-xs text-muted mt-1 leading-relaxed px-4">
+            Enter the 6-digit code we sent to <br/>
+            <span className="text-heart-purple font-bold font-mono">{email || 'your email'}</span>
           </p>
         </div>
 
         <form onSubmit={handleVerify} className="space-y-6">
-          {/* 6 Digit Inputs */}
           <div className="flex justify-center gap-2" onPaste={handlePaste}>
             {otp.map((digit, idx) => (
               <input
@@ -121,34 +122,41 @@ export default function VerifyOTP() {
                 value={digit}
                 onChange={(e) => handleChange(idx, e.target.value)}
                 onKeyDown={(e) => handleKeyDown(idx, e)}
-                className="w-11 h-13 text-center text-xl font-mono font-bold bg-white/5 border border-white/15 rounded-xl text-white focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
+                className="w-10 h-12 text-center text-xl font-mono font-black bg-midnight-surface border border-midnight-border rounded-xl text-ink focus:outline-none focus:border-heart-purple focus:ring-2 focus:ring-heart-purple/20 transition-all shadow-inner"
               />
             ))}
           </div>
 
-          {error && <p className="text-xs text-rose-400">{error}</p>}
-          {success && <p className="text-xs text-emerald-400">{success}</p>}
+          {error && <p className="text-xs text-heart-red font-bold animate-in shake-in-1">{error}</p>}
+          {success && <p className="text-xs text-heart-green font-bold">{success}</p>}
 
           <button
             type="submit"
-            disabled={loading || otp.join('').length !== 6}
-            className="btn-primary w-full py-3 text-sm font-semibold rounded-xl disabled:opacity-50 transition-all shadow-lg"
+            disabled={loading || otp.join('').length !== 6 || !!success}
+            className="btn-primary w-full py-3.5 font-black uppercase tracking-widest text-xs shadow-glow-purple disabled:opacity-50"
           >
-            {loading ? 'Verifying…' : 'Verify & Continue 🚀'}
+            {loading ? 'Verifying...' : 'Verify & Continue 🚀'}
           </button>
         </form>
 
-        <div className="text-xs text-muted pt-2 border-t border-white/5 flex items-center justify-between">
-          <span>Didn't receive code?</span>
+        <div className="text-[10px] text-muted pt-4 border-t border-midnight-border/50 flex flex-col items-center gap-2">
+          <p className="font-medium">Didn't receive the code?</p>
           <button
             type="button"
             onClick={handleResend}
-            disabled={cooldown > 0 || resending}
-            className="text-purple-400 hover:underline font-semibold disabled:opacity-40 disabled:no-underline"
+            disabled={cooldown > 0 || resending || !!success}
+            className="text-heart-purple hover:underline font-black uppercase tracking-wider disabled:opacity-40 disabled:no-underline transition-all"
           >
             {cooldown > 0 ? `Resend in ${cooldown}s` : resending ? 'Sending...' : 'Resend Code'}
           </button>
         </div>
+
+        <button
+          onClick={() => navigate('/login')}
+          className="text-[10px] text-muted hover:text-ink font-bold uppercase tracking-widest transition-colors"
+        >
+          ← Back to Login
+        </button>
       </div>
     </div>
   )

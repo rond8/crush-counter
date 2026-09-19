@@ -25,6 +25,8 @@ export function groupPolls(rows) {
       map.set(r.poll_id, {
         id: r.poll_id,
         question: r.question,
+        description: r.poll_description || null,
+        image_url: r.poll_image_url || null,
         type: r.poll_type || 'A', // 'A' (admin-only) or 'B' (community allowed)
         created_at: r.created_at,
         closed_at: r.closed_at,
@@ -54,11 +56,12 @@ export function groupPolls(rows) {
 
 /**
  * Admin: Create a poll (Type A or B).
+ * Note: Requires 'image_url' column in 'polls' table and 'p_image_url' parameter in 'create_poll' RPC.
  */
-export async function createPoll(question, options, pollType = 'A') {
+export async function createPoll(question, options, pollType = 'A', imageUrl = null, description = null) {
   const payload = options.map((o) => ({
     label: o.label,
-    image_url: o.imageUrl || null,
+    image_url: o.image_url || null,
     color: o.color || null,
   }))
 
@@ -66,6 +69,8 @@ export async function createPoll(question, options, pollType = 'A') {
     p_question: question.trim(),
     p_options: payload,
     p_type: pollType,
+    p_image_url: imageUrl,
+    p_description: description?.trim() || null,
   })
   if (error) throw new Error(error.message || 'Failed to create poll')
 }
@@ -81,6 +86,17 @@ export async function submitOption(pollId, label, imageUrl = null, color = null)
     p_color: color,
   })
   if (error) throw new Error(error.message || 'Failed to submit option')
+}
+
+/**
+ * User: Join a Weekly Contest poll (Type 'W').
+ * Costs 10 coins, adds the user as an option.
+ */
+export async function joinContestPoll(pollId) {
+  const { error } = await supabase.rpc('join_contest_poll', {
+    p_poll_id: pollId,
+  })
+  if (error) throw new Error(error.message || 'Failed to join contest')
 }
 
 /**
@@ -128,4 +144,23 @@ export async function votePoll(optionId, useCoin = false) {
     p_use_coin: useCoin,
   })
   if (error) throw new Error(error.message || 'Failed to cast vote')
+}
+
+/**
+ * Upload an image for a poll option to the 'polls' storage bucket.
+ */
+export async function uploadPollImage(file) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const ext = file.name.split('.').pop() || 'jpg'
+  const path = `${user.id}/${Date.now()}.${ext}`
+
+  const { error: uploadError } = await supabase.storage
+    .from('avatars') // Use existing 'avatars' bucket instead of 'polls' to avoid "Bucket not found"
+    .upload(path, file, { upsert: true, cacheControl: '3600' })
+  if (uploadError) throw uploadError
+
+  const { data } = supabase.storage.from('avatars').getPublicUrl(path)
+  return data.publicUrl
 }

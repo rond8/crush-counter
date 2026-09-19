@@ -59,24 +59,26 @@ export default function Featured() {
             <Link
               key={p.username}
               to={`/u/${p.username}`}
-              className={`card p-4 flex items-center gap-4 hover:ring-1 hover:ring-heart-purple/40 transition-shadow ${
+              className={`card p-4 flex items-center gap-4 hover:ring-2 hover:ring-heart-purple/40 transition-all ${
                 i < 3 ? 'ring-1 ring-heart-yellow/40' : ''
               }`}
             >
-              <span className="text-lg font-display w-8 text-center text-muted">
+              <span className="text-lg font-display w-8 text-center text-muted shrink-0">
                 {RANK_MEDALS[i] ?? `#${i + 1}`}
               </span>
 
-              {p.avatar_url ? (
-                <img src={p.avatar_url} alt="" className="w-11 h-11 rounded-full object-cover" />
-              ) : (
-                <span className="w-11 h-11 rounded-full bg-heart-purple/20 flex items-center justify-center text-sm font-display">
-                  {p.username[0]?.toUpperCase()}
-                </span>
-              )}
+              <div className="shrink-0">
+                {p.avatar_url ? (
+                  <img src={p.avatar_url} alt="" className="w-11 h-11 rounded-full object-cover ring-2 ring-white/5 shadow-sm" />
+                ) : (
+                  <span className="w-11 h-11 rounded-full bg-heart-purple/20 flex items-center justify-center text-sm font-display text-heart-purple font-bold border border-heart-purple/30">
+                    {p.username[0]?.toUpperCase()}
+                  </span>
+                )}
+              </div>
 
               <div className="flex-1 min-w-0">
-                <p className="font-mono text-sm text-ink truncate">@{p.username}</p>
+                <p className="text-sm font-black text-ink truncate hover:text-heart-purple transition-colors block">@{p.username}</p>
                 {(p.gender || p.relationship_status) && (
                   <p className="text-xs text-muted truncate">
                     {[p.gender, p.relationship_status].filter(Boolean).join(' · ')}
@@ -84,7 +86,7 @@ export default function Featured() {
                 )}
               </div>
 
-              <span className="text-sm font-semibold text-heart-yellow whitespace-nowrap">
+              <span className="text-sm font-bold text-heart-yellow whitespace-nowrap bg-heart-yellow/5 px-2 py-1 rounded-lg border border-heart-yellow/20 shrink-0">
                 🌟 {p.fame}
               </span>
             </Link>

@@ -1,7 +1,7 @@
 {
   "name": "crush-counter",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -16,9 +16,12 @@
     "@capacitor/app": "^8.1.1",
     "@capacitor/core": "^8.4.1",
     "@capacitor/local-notifications": "^8.2.1",
+    "@capacitor/push-notifications": "^8.1.2",
     "@capacitor/splash-screen": "^8.0.1",
-    "@revenuecat/purchases-capacitor": "^10.0.0",
     "@supabase/supabase-js": "^2.45.4",
+    "chess.js": "^1.4.0",
+    "cordova-plugin-purchase": "^13.18.0",
+    "firebase": "^12.16.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.26.2"

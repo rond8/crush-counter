@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { useAuth } from '../context/AuthContext'
-import { getShopItems, buyShopItemWithCoins, grantPurchasedItem } from '../lib/shop'
-import { getShopPackage, purchaseConsumable } from '../lib/purchases'
+import { getShopItems, buyShopItemWithCoins } from '../lib/shop'
+import { purchaseCoins } from '../lib/purchases'
 import { ITEM_INFO } from '../lib/items'
 
 const IAP_PRODUCT_IDS = {
@@ -50,24 +50,16 @@ export default function Shop() {
     }
   }
 
-  const handleBuyWithMoney = async (itemType) => {
+  const handleRefillCoins = async () => {
     setError('')
     setSuccess('')
-    setBuyingKey(`${itemType}:money`)
+    setBuyingKey('refill:100')
     try {
-      const productId = IAP_PRODUCT_IDS[itemType]
-      const pkg = await getShopPackage(productId)
-      if (!pkg) {
-        throw new Error("This item isn't available for purchase right now — check back soon.")
-      }
-      await purchaseConsumable(pkg)
-      await grantPurchasedItem(itemType)
-      setSuccess(`Added ${ITEM_INFO[itemType]?.name ?? itemType} to your inventory!`)
-      await refreshProfile()
+      await purchaseCoins('100coin')
+      // Approval handler in purchases.js will call grant_coins
+      setSuccess('Redirecting to Google Play Store...')
     } catch (err) {
-      if (!err?.userCancelled) {
-        setError(err.message || 'Could not complete that purchase.')
-      }
+      setError(err.message || 'Could not initiate purchase.')
     } finally {
       setBuyingKey(null)
     }
@@ -98,6 +90,33 @@ export default function Shop() {
           </div>
         </div>
       </section>
+
+      {/* Coin Packs Section (Google Play) */}
+      {isNative && (
+        <section className="space-y-4">
+          <div className="flex items-center gap-2 px-1">
+             <span className="w-1.5 h-6 bg-amber-500 rounded-full" />
+             <h2 className="font-display text-xl font-bold text-ink uppercase tracking-tight">Coin Packs</h2>
+          </div>
+          <div className="card p-5 border border-amber-500/20 bg-gradient-to-br from-amber-500/10 to-transparent flex items-center justify-between gap-4">
+             <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-2xl shadow-lg">
+                   🪙
+                </div>
+                <div>
+                   <h3 className="text-sm font-black text-ink">50 Gold Coins</h3>
+                   <p className="text-[10px] text-muted">One-time purchase via Google Play</p>
+                </div>
+             </div>
+             <button
+               onClick={handleRefillCoins}
+               className="btn-primary !bg-amber-500 hover:!bg-amber-600 !py-2 !px-6 text-xs font-black shadow-lg shadow-amber-500/20"
+             >
+               {buyingKey === 'refill:100' ? '...' : 'BUY PACK'}
+             </button>
+          </div>
+        </section>
+      )}
 
       {/* Notifications */}
       {error && (
@@ -178,17 +197,6 @@ export default function Shop() {
                       </span>
                     )}
                   </button>
-
-                  {isNative && (
-                    <button
-                      onClick={() => handleBuyWithMoney(item.item_type)}
-                      disabled={anyBuying}
-                      className="btn-ghost px-3 !py-2 text-xs font-semibold border border-white/10 hover:bg-white/5 transition-all hover:scale-[1.02]"
-                      title="Buy with real money"
-                    >
-                      {buyingMoney ? '…' : '💳 In-App'}
-                    </button>
-                  )}
                 </div>
               </div>
             )

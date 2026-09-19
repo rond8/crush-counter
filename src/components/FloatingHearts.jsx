@@ -15,31 +15,29 @@ const HEART_IMAGES = [
 function makeParticles(count) {
   return Array.from({ length: count }, (_, i) => {
     const left = (i * 37) % 100
-    const delay = (i * 2.3) % 14
-    const duration = 12 + ((i * 5) % 10)
-    // Sizing adjusted slightly higher for detailed images (14px - 30px)
-    const size = 30 + ((i * 4) % 16)
+    const delay = (i * 2.3) % 15
+    const duration = 15 + ((i * 7) % 12)
+    const size = 16 + ((i * 3) % 12)
     const image = HEART_IMAGES[i % HEART_IMAGES.length]
     return { id: i, left, delay, duration, size, image }
   })
 }
 
-const particles = makeParticles(16)
+const particles = makeParticles(10)
 
 export default function FloatingHearts() {
   return (
-    <div className="pointer-events-none fixed inset-0 overflow-hidden -z-10" aria-hidden="true">
+    <div className="pointer-events-none fixed inset-0 overflow-hidden" style={{ zIndex: -1 }} aria-hidden="true">
       {particles.map((p) => (
         <img
           key={p.id}
           src={p.image}
           alt=""
-          className="absolute bottom-0 animate-floatUp object-contain"
+          className="absolute bottom-0 animate-floatUp object-contain opacity-0"
           style={{
             left: `${p.left}%`,
             width: `${p.size}px`,
             height: `${p.size}px`,
-            opacity: 0.45,
             animationDelay: `${p.delay}s`,
             animationDuration: `${p.duration}s`,
           }}

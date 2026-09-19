@@ -1,0 +1,41 @@
+CRUSH COUNTER - UPDATE HISTORY (v1.2 - v1.9.3)
+--------------------------------------------
+
+[v1.9.3] - LATEST
+- Weekly Contest System: Users can now join global polls for 10 coins with 500 coin prizes.
+- Contest Payouts: Automatic prize delivery and admin approval flow for community entries.
+- Search UI: Added real-time search functionality to the rankings list.
+- Visual Identity: Admins can now add custom cover images to every poll.
+- Database: Optimized RPC functions for contest entry fees and winner selection.
+
+[v1.8]
+- Added FAQ System: Dedicated Help Center accessible from the sidebar.
+- Version Sync: Unified v1.8 across Android build, package.json, and Settings UI.
+[v1.7]
+- Login Page Branding: Added pulsing heart icon for better visual identity.
+- Whisper Wall Repair:
+  * Case-insensitive hashtag filtering.
+  * Pure random sorting for content discovery.
+  * Auto-adds pending tags when publishing.
+- Navigation: Clickable profile links added to Whisper Wall, Leaderboard, and Messages.
+- Bug Fixes: Final fix for 'username already in use' loop; AdMob pre-fetching optimization.
+
+[v1.6]
+- Fame Tiers & Auras: Visual fame tiers and emoji badges based on engagement.
+- Settings Overhaul: Added 'Danger Zone' (Account Deletion) and Admin Ad controls.
+- UI Refinement: Messenger-style chat interface improvements.
+
+[v1.3 - v1.5]
+- Social Gamification: virtual pet widget.
+- Friend System: friend management and discovery.
+- Keyboard Fixes: Implemented 'AdjustResize' logic to prevent UI overlap.
+- Image Loading: Robust 'Cache-Busting' system for profile pictures.
+
+[v1.2]
+- Security: Optimized Supabase RLS policies for anonymous matching.
+- Core Logic: Finalized Mutual Match server-side privacy enforcement.
+- Monetization: Initial AdMob SDK integration and banner support.
+
+--------------------------------------------
+SQL REQUIRED FOR v1.7+:
+Open T.SQL and run 'get_whispers_v4' to enable new sorting logic.

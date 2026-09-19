@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import HomeSlider from '../components/HomeSlider'
 import { getCurrentEvent } from '../lib/event'
 
 const LEGEND = [
@@ -22,6 +23,8 @@ export default function Home() {
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-14 space-y-14">
+      <HomeSlider />
+
       <section className="text-center space-y-4">
         <div className="text-5xl animate-pulseGlow">💜</div>
         <h1 className="font-display text-4xl md:text-5xl">

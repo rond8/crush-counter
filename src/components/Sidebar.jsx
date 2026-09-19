@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { getFameTier } from '../lib/fame'
+import { handleImageError } from '../lib/utils'
 import VerifiedBadge from './VerifiedBadge'
 
 const NAV_SECTIONS = [
@@ -67,11 +69,49 @@ const NAV_SECTIONS = [
           </svg>
         ),
       },
+      {
+        to: '/art-corner',
+        label: 'Art Corner',
+        icon: (
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+          </svg>
+        ),
+      },
+      {
+        to: '/whispers',
+        label: 'Whisper Wall',
+        icon: (
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+          </svg>
+        ),
+      },
     ],
   },
   {
     title: 'Play',
     links: [
+      {
+        to: '/games',
+        label: 'Games',
+        authOnly: true,
+        icon: (
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 9h12M8 6v6m8-6v6M5 18h14a2 2 0 002-2v-4a5 5 0 00-5-5H8a5 5 0 00-5 5v4a2 2 0 002 2zm1-4h.01M18 14h.01" />
+          </svg>
+        ),
+      },
+      {
+        to: '/teammates',
+        label: 'Find Teammates',
+        authOnly: true,
+        icon: (
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2m6-9a4 4 0 100-8 4 4 0 000 8zm8-1a3 3 0 100-6m4 13v-2a4 4 0 00-3-3.87" />
+          </svg>
+        ),
+      },
       {
         to: '/spin',
         label: 'Spin',
@@ -118,6 +158,21 @@ const NAV_SECTIONS = [
     title: 'Social',
     links: [
       {
+        to: '/random-chat',
+        label: 'Random Chat',
+        authOnly: true,
+        icon: (
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="3" />
+            <circle cx="8.5" cy="8.5" r="1.25" fill="currentColor" />
+            <circle cx="15.5" cy="8.5" r="1.25" fill="currentColor" />
+            <circle cx="12" cy="12" r="1.25" fill="currentColor" />
+            <circle cx="8.5" cy="15.5" r="1.25" fill="currentColor" />
+            <circle cx="15.5" cy="15.5" r="1.25" fill="currentColor" />
+          </svg>
+        ),
+      },
+      {
         to: '/messages',
         label: 'Messages',
         authOnly: true,
@@ -138,21 +193,21 @@ const NAV_SECTIONS = [
           </svg>
         ),
       },
+      {
+        to: '/friends',
+        label: 'Friends',
+        authOnly: true,
+        icon: (
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+        ),
+      },
     ],
   },
   {
     title: 'Account',
     links: [
-      {
-        to: '/premium',
-        label: 'Premium',
-        authOnly: true,
-        icon: (
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-          </svg>
-        ),
-      },
       {
         to: '/profile',
         label: 'Profile',
@@ -182,6 +237,41 @@ export default function Sidebar({ open, onClose }) {
   const { session, profile, signOut, unreadCount } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+
+  // Track which sections are collapsed
+  const [collapsedSections, setCollapsedSections] = useState({})
+
+  const toggleSection = (title) => {
+    setCollapsedSections(prev => ({
+      ...prev,
+      [title]: !prev[title]
+    }))
+  }
+
+  // Auto-expand sections that contain the active route
+  useEffect(() => {
+    const activeSection = NAV_SECTIONS.find(section =>
+      section.links.some(link => link.to === location.pathname)
+    )
+    if (activeSection) {
+      setCollapsedSections(prev => ({
+        ...prev,
+        [activeSection.title]: false
+      }))
+    }
+  }, [location.pathname])
+
+  // Prevent background scrolling when sidebar is open
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [open])
 
   const handleSignOut = async () => {
     onClose()
@@ -239,24 +329,39 @@ export default function Sidebar({ open, onClose }) {
         </div>
 
         {/* Navigation Sections */}
-        <nav className="flex-1 overflow-y-auto px-4 py-5 space-y-6 scrollbar-thin scrollbar-thumb-midnight-border">
+        <nav className="flex-1 overflow-y-auto px-4 py-5 space-y-4 scrollbar-thin scrollbar-thumb-midnight-border">
           {NAV_SECTIONS.map((section) => {
             const visibleLinks = section.links.filter((link) => !link.authOnly || session)
             if (visibleLinks.length === 0) return null
+
+            const isCollapsed = collapsedSections[section.title] ?? false
+
             return (
-              <div key={section.title} className="space-y-2">
-                <div className="flex items-center gap-2 px-2">
-                  <p className="text-[10px] uppercase tracking-[0.3em] text-muted font-bold opacity-80">
-                    {section.title}
-                  </p>
-                  <div className="h-[1px] flex-1 bg-midnight-border/40" />
-                </div>
-                <div className="space-y-1">
+              <div key={section.title} className="space-y-1">
+                {/* Collapsible Header */}
+                <button
+                  onClick={() => toggleSection(section.title)}
+                  className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors group"
+                >
+                  <div className="flex items-center gap-2">
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-muted font-bold opacity-80 group-hover:text-ink transition-colors">
+                      {section.title}
+                    </p>
+                  </div>
+                  <svg
+                    className={`w-3 h-3 text-muted transition-transform duration-300 ${isCollapsed ? '-rotate-90' : ''}`}
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"
+                  >
+                    <path d="M19 9l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+
+                {/* Animated Links Container */}
+                <div className={`space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${isCollapsed ? 'max-h-0 opacity-0' : 'max-h-[500px] opacity-100 mt-1'}`}>
                   {visibleLinks.map((link) => {
                     const active = isActive(link.to)
                     return (
                       <Link key={link.to} to={link.to} onClick={onClose} className={linkClass(link.to)}>
-                        {/* Active Indicator Strip */}
                         {active && (
                           <span className="absolute left-0 top-2 bottom-2 w-1 bg-heart-purple rounded-r-full shadow-[0_0_8px_rgba(181,123,255,0.8)]" />
                         )}
@@ -290,11 +395,17 @@ export default function Sidebar({ open, onClose }) {
                 <div className="p-3 rounded-2xl bg-midnight border border-midnight-border/80 flex items-center justify-between shadow-inner">
                   <div className="flex items-center gap-2.5 min-w-0">
                     {profile.avatar_url ? (
-                      <img
-                        src={profile.avatar_url}
-                        alt={profile.username}
-                        className="w-8 h-8 rounded-full object-cover ring-2 ring-heart-purple/40"
-                      />
+                      <>
+                        <img
+                          src={profile.avatar_url}
+                          alt={profile.username}
+                          className="w-8 h-8 rounded-full object-cover ring-2 ring-heart-purple/40"
+                          onError={handleImageError}
+                        />
+                        <div className="avatar-fallback hidden w-8 h-8 rounded-full bg-heart-purple/20 text-heart-purple items-center justify-center font-bold text-xs">
+                          {profile.username?.[0]?.toUpperCase()}
+                        </div>
+                      </>
                     ) : (
                       <div className="w-8 h-8 rounded-full bg-heart-purple/20 text-heart-purple flex items-center justify-center font-bold text-xs">
                         {profile.username?.[0]?.toUpperCase()}
@@ -303,6 +414,7 @@ export default function Sidebar({ open, onClose }) {
                     <div className="min-w-0">
                       <div className="flex items-center gap-1 font-mono text-xs font-semibold text-ink truncate">
                         <span className="truncate">@{profile.username}</span>
+                        {getFameTier(profile.fame).emoji}
                         <VerifiedBadge verified={Boolean(profile?.is_verified)} />
                       </div>
                       <span className="text-[11px] text-muted flex items-center gap-1">
@@ -344,6 +456,10 @@ export default function Sidebar({ open, onClose }) {
             >
               Privacy
             </a>
+            <span>•</span>
+            <Link to="/faq" onClick={onClose} className="hover:text-ink transition-colors">
+              FAQ
+            </Link>
             <span>•</span>
             <Link to="/support" onClick={onClose} className="hover:text-ink transition-colors">
               Support

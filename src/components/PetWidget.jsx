@@ -15,9 +15,11 @@ import {
 } from '../lib/pet'
 import { ITEM_INFO } from '../lib/items'
 import { timeAgo } from '../lib/time'
+import PetMiniGame from './PetMiniGame'
 
 const TICK_INTERVAL_MS = 60 * 1000
 const REROLL_COST = 10
+const ADOPT_COST = 10
 
 function petState(pet) {
   if (!pet.is_alive) return 'dead'
@@ -59,6 +61,10 @@ function describeYield(result) {
 function PetSprite({ species, state, size = 'w-24 h-24', fallbackEmoji = '🐾' }) {
   const [failed, setFailed] = useState(false)
   const src = getPetImage(species, state)
+
+  useEffect(() => {
+    setFailed(false)
+  }, [src])
 
   if (failed) {
     return (
@@ -121,6 +127,8 @@ export default function PetWidget() {
   const [claimingYield, setClaimingYield] = useState(false)
   const [yieldError, setYieldError] = useState('')
   const [yieldMessage, setYieldMessage] = useState('')
+
+  const [playingMiniGame, setShowMiniGame] = useState(false)
 
   const refresh = useCallback(async () => {
     const data = await getMyPet()
@@ -217,7 +225,12 @@ export default function PetWidget() {
       setYieldMessage(describeYield(result))
       await Promise.all([refresh(), refreshProfile()])
     } catch (err) {
-      setYieldError(err.message || 'Could not collect right now.')
+      const msg = err.message || 'Could not collect right now.'
+      setYieldError(msg)
+      // If the server says they passed away, refresh to show the adopt flow
+      if (msg.toLowerCase().includes('passed away')) {
+        await refresh()
+      }
     } finally {
       setClaimingYield(false)
     }
@@ -272,9 +285,10 @@ export default function PetWidget() {
               <button
                 type="submit"
                 disabled={adopting || rerolling || !adoptName.trim()}
-                className="btn-primary flex-1"
+                className="btn-primary flex-1 flex flex-col items-center leading-tight"
               >
-                {adopting ? 'Adopting…' : 'Confirm adoption'}
+                <span>{adopting ? 'Adopting…' : 'Confirm adoption'}</span>
+                <span className="text-[10px] opacity-80">{profile?.has_adopted_pet ? `${ADOPT_COST} 🪙` : 'FREE!'}</span>
               </button>
             </div>
           </form>
@@ -358,13 +372,13 @@ export default function PetWidget() {
           <span className="text-[10px] text-muted">{feedCost} 🪙</span>
         </button>
         <button
-          onClick={() => runAction(playWithPet, '🎾 Played together!')}
-          disabled={acting || !canPlay || (profile?.coins ?? 0) < playCost}
+          onClick={() => setShowMiniGame(true)}
+          disabled={acting || !canPlay}
           className="btn-ghost !px-2 !py-2 text-xs flex flex-col items-center gap-0.5"
           title={!canPlay ? 'Too hungry to play — feed first' : undefined}
         >
           <span>🎾 Play</span>
-          <span className="text-[10px] text-muted">{playCost} 🪙</span>
+          <span className="text-[10px] text-heart-purple font-black">MINI-GAME</span>
         </button>
         <button
           onClick={() => runAction(healPet, '💊 Healed!')}
@@ -430,6 +444,16 @@ export default function PetWidget() {
             Abandon pet
           </button>
         </div>
+      )}
+
+      {playingMiniGame && (
+        <PetMiniGame
+          onWin={() => {
+            setShowMiniGame(false)
+            runAction(playWithPet, '🎾 Play time success!')
+          }}
+          onClose={() => setShowMiniGame(false)}
+        />
       )}
     </section>
   )

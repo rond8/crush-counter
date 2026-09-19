@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "832670924793",
+    "project_id": "crush-counter-503715",
+    "storage_bucket": "crush-counter-503715.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:832670924793:android:a0e0da58c02ea90c94c728",
+        "android_client_info": {
+          "package_name": "com.rdosio.crushcounter"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "832670924793-aat2k5pm396gej4a5b86au2ttn387ohv.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB_8FvONcUe5HHzJzgTqXNj4PMOqLuaIqM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "832670924793-aat2k5pm396gej4a5b86au2ttn387ohv.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

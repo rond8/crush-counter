@@ -1,14 +1,70 @@
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
+import { useAuth } from '../context/AuthContext'
 import { PENDING_REFERRAL_STORAGE_KEY } from '../lib/missions'
-import { getOAuthRedirectUrl } from '../lib/oauth'
+import { calculateAge } from '../lib/age'
 
 export default function Register() {
+  const { signUp } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const refCode = searchParams.get('ref')
+
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [username, setUsername] = useState('')
+  const [displayName, setDisplayName] = useState('')
+  const [birthday, setBirthday] = useState('')
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const handleEmailSignUp = async (e) => {
+    e.preventDefault()
+    const cleanUsername = username.trim().toLowerCase()
+    const computedAge = calculateAge(birthday)
+
+    if (cleanUsername.length < 3) return setError('Username too short.')
+    if (!birthday) return setError('Birthday is required.')
+    if (computedAge === null || computedAge < 18) return setError('You must be at least 18 years old.')
+    if (password.length < 6) return setError('Password must be at least 6 characters.')
+
+    setLoading(true)
+    setError('')
+
+    try {
+      if (refCode) {
+        try { localStorage.setItem(PENDING_REFERRAL_STORAGE_KEY, refCode) } catch {}
+      }
+
+      // Check if username is taken
+      const { data: existing } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('username', cleanUsername)
+        .maybeSingle()
+
+      if (existing) {
+        return setError('That username is already taken.')
+      }
+
+      await signUp({
+        email,
+        password,
+        username: cleanUsername,
+        displayName: displayName.trim() || cleanUsername,
+        age: computedAge,
+        birthday: birthday,
+      })
+
+      // Send user to OTP verification page
+      navigate('/verify-otp', { state: { email } })
+    } catch (err) {
+      setError(err.message || 'Failed to create account.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleGoogleSignIn = async () => {
     try {
@@ -22,7 +78,9 @@ export default function Register() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: getOAuthRedirectUrl(),
+          redirectTo: Capacitor.isNativePlatform()
+            ? 'com.rdosio.crushcounter://login-callback'
+            : `${window.location.origin}/dashboard`,
         },
       })
       if (error) setError(error.message)
@@ -33,18 +91,91 @@ export default function Register() {
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-6 py-10">
-      <div className="w-full max-w-sm card p-8 text-center">
-        <div className="mb-8">
-          <h1 className="font-display text-3xl">Join Crush Counter</h1>
-          <p className="text-muted text-sm mt-2">Anonymous hearts. No spoilers unless it's mutual.</p>
+      <div className="w-full max-w-sm card p-8 text-center border-midnight-border shadow-xl">
+        <div className="mb-6">
+          <h1 className="font-display text-3xl font-black text-ink italic">Join the Club</h1>
+          <p className="text-muted text-sm mt-2">Anonymous hearts. Real matches.</p>
         </div>
 
-        {error && <p className="text-rose-400 text-sm mb-4">{error}</p>}
+        {error && (
+          <div className="p-3 mb-4 bg-heart-red/10 border border-heart-red/20 rounded-xl text-heart-red text-xs font-bold">
+            {error}
+          </div>
+        )}
 
+        {/* Email Signup Form */}
+        <form onSubmit={handleEmailSignUp} className="space-y-4 text-left">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="block text-[10px] font-black uppercase tracking-widest text-muted ml-1">Username</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-xs font-bold">@</span>
+                <input
+                  type="text"
+                  required
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value.replace(/[^a-z0-9_]/gi, ''))}
+                  placeholder="user"
+                  className="w-full input-field pl-7 !py-2.5 text-sm font-mono"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="block text-[10px] font-black uppercase tracking-widest text-muted ml-1">Birthday</label>
+              <input
+                type="date"
+                required
+                value={birthday}
+                onChange={(e) => setBirthday(e.target.value)}
+                className="w-full input-field !py-2.5 text-sm"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="block text-[10px] font-black uppercase tracking-widest text-muted ml-1">Email Address</label>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="name@example.com"
+              className="w-full input-field !py-2.5 text-sm"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="block text-[10px] font-black uppercase tracking-widest text-muted ml-1">Password</label>
+            <input
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="w-full input-field !py-2.5 text-sm"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="btn-primary w-full py-3.5 font-black uppercase tracking-widest text-xs shadow-glow-purple"
+          >
+            {loading ? 'Creating account...' : 'Create Account'}
+          </button>
+        </form>
+
+        <div className="my-6 flex items-center gap-3">
+          <div className="h-[1px] flex-1 bg-midnight-border/50"></div>
+          <span className="text-[10px] font-bold text-muted uppercase tracking-widest">or</span>
+          <div className="h-[1px] flex-1 bg-midnight-border/50"></div>
+        </div>
+
+        {/* Google OAuth Button */}
         <button
           type="button"
           onClick={handleGoogleSignIn}
-          className="w-full flex items-center justify-center gap-3 bg-white text-gray-800 font-medium py-3 px-4 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors shadow-sm"
+          className="w-full flex items-center justify-center gap-3 bg-white text-gray-800 font-medium py-3 px-4 rounded-xl border border-gray-300 hover:bg-gray-50 transition-all shadow-sm active:scale-95"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path
@@ -64,16 +195,16 @@ export default function Register() {
               d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
             />
           </svg>
-          Continue with Google
+          <span className="text-sm font-bold">Sign up with Google</span>
         </button>
 
-        <p className="text-xs text-muted mt-6">
-          By signing up, you agree to our terms and confirm you are at least 18 years old.
+        <p className="text-[10px] text-muted mt-6 font-medium leading-relaxed">
+          By signing up, you confirm you are <span className="text-ink font-bold">18+</span> and agree to our <a href="/privacy" className="underline">Terms</a>.
         </p>
 
-        <p className="text-center text-sm text-muted mt-6">
-          Already have an account?{' '}
-          <Link to="/login" className="text-heart-purple hover:underline">
+        <p className="text-center text-sm text-muted mt-6 font-medium">
+          Already a member?{' '}
+          <Link to="/login" className="text-heart-purple font-bold hover:underline">
             Sign in
           </Link>
         </p>

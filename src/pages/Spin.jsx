@@ -103,9 +103,13 @@ function Wheel({ rotation, spinning }) {
           <circle cx={center} cy={center} r="28" fill="#090214" stroke="rgba(255,255,255,0.12)" strokeWidth="2" />
         </g>
       </svg>
-      <div className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2 w-0 h-0 border-[14px] border-x-transparent border-b-white" />
+      <div className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2 w-0 h-0 border-[14px] border-x-transparent border-b-heart-purple shadow-sm" />
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-        <div className="w-20 h-20 rounded-full bg-midnight border border-white/10 shadow-[0_0_0_10px_rgba(255,255,255,0.02)] backdrop-blur-sm" />
+        <div className="w-20 h-20 rounded-full bg-midnight border border-midnight-border shadow-lg backdrop-blur-sm flex items-center justify-center">
+           <div className="w-12 h-12 rounded-full border border-heart-purple/20 bg-heart-purple/5 flex items-center justify-center">
+              <span className="text-xl">✨</span>
+           </div>
+        </div>
       </div>
     </div>
   )
@@ -114,7 +118,7 @@ function Wheel({ rotation, spinning }) {
 export default function Spin() {
   const { profile, refreshProfile } = useAuth()
   const isVerified = Boolean(profile?.is_verified)
-  const hasPremium = Boolean(profile?.premium_unlocked) || (profile?.fame ?? 0) >= 500
+  const hasPremium = Boolean(profile?.premium_unlocked) || (profile?.fame ?? 0) >= 5000
 
   const [spinning, setSpinning] = useState(false)
   const [result, setResult] = useState(null)
@@ -229,33 +233,45 @@ export default function Spin() {
         >
           <Wheel rotation={wheelRotation} spinning={wheelSpinning} />
           {!wheelSpinning && pendingResult && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm rounded-full transition-opacity duration-300">
-              <div className="w-60 p-5 rounded-3xl border border-white/10 bg-white/10 text-center shadow-[0_0_0_1px_rgba(255,255,255,0.06)]">
-                <p className="text-sm uppercase tracking-[0.3em] text-muted">Result</p>
-                <img
-                  src={ITEMS[pendingResult.item_type]?.icon}
-                  alt={ITEMS[pendingResult.item_type]?.name}
-                  className="mx-auto my-4 w-16 h-16"
-                />
-                <p className="font-display text-xl text-ink">
+            <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-md rounded-full transition-opacity duration-300">
+              <div className="w-60 p-6 rounded-3xl border border-white/20 bg-slate-900/90 text-center shadow-2xl">
+                <p className="text-[10px] uppercase tracking-[0.4em] text-heart-purple font-bold mb-2">Reward Unlocked</p>
+                <div className="relative">
+                   <div className="absolute inset-0 bg-heart-purple/20 blur-2xl rounded-full" />
+                   <img
+                    src={ITEMS[pendingResult.item_type]?.icon}
+                    alt={ITEMS[pendingResult.item_type]?.name}
+                    className="relative mx-auto mb-4 w-20 h-20 drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]"
+                  />
+                </div>
+                <h3 className="font-display text-2xl text-white mb-1">
                   {pendingResult.item_type === 'coins'
-                    ? 'You got +3 coins!'
-                    : `You got ${ITEMS[pendingResult.item_type]?.name}!`}
-                </p>
-                <p className="text-sm text-muted mt-1">{ITEMS[pendingResult.item_type]?.tagline}</p>
+                    ? '+3 Coins'
+                    : ITEMS[pendingResult.item_type]?.name}
+                </h3>
+                <p className="text-xs text-slate-300 leading-relaxed px-2">{ITEMS[pendingResult.item_type]?.tagline}</p>
+                <button
+                  onClick={() => {
+                    setResult(pendingResult)
+                    setPendingResult(null)
+                  }}
+                  className="mt-6 w-full py-2 bg-heart-purple text-white text-xs font-bold rounded-xl shadow-lg hover:scale-105 active:scale-95 transition-all"
+                >
+                  Awesome!
+                </button>
               </div>
             </div>
           )}
         </div>
 
-        {result && !spinning && !wheelSpinning && (
-          <div className="text-center space-y-2">
-            <p className="font-display text-xl">
+        {result && !pendingResult && !spinning && !wheelSpinning && (
+          <div className="text-center space-y-2 p-4 rounded-2xl bg-midnight-surface/50 border border-midnight-border">
+            <p className="font-display text-xl text-ink">
               {result.item_type === 'coins' ? 'Spin complete!' : `Confirmed: ${ITEMS[result.item_type]?.name}`}
             </p>
             <p className="text-sm text-muted mt-1">{ITEMS[result.item_type]?.tagline}</p>
             {(isVerified || hasPremium) && (
-              <p className="text-xs text-muted">
+              <p className="text-[10px] text-muted mt-2">
                 {isVerified && '✨ Verified perk active — your spin sparkled extra bright.'}
                 {hasPremium && !isVerified && '👑 Premium perk active — enjoy the faster spin reveal.'}
               </p>
@@ -342,13 +358,17 @@ export default function Spin() {
 
         {showLegend && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 animate-fade-in">
-            {Object.entries(ITEMS).map(([key, item]) => (
-              <div key={key} className="card p-4 text-center space-y-1">
-                <img src={item.icon} alt="" className="w-9 h-9 mx-auto" />
-                <p className="text-sm font-semibold text-ink">{item.name}</p>
-                <p className="text-xs text-muted">{item.tagline}</p>
-              </div>
-            ))}
+            {WHEEL_ORDER.map((key) => {
+              const item = ITEMS[key]
+              if (!item) return null
+              return (
+                <div key={key} className="card p-4 text-center space-y-1">
+                  <img src={item.icon} alt="" className="w-9 h-9 mx-auto" />
+                  <p className="text-sm font-semibold text-ink">{item.name}</p>
+                  <p className="text-xs text-muted">{item.tagline}</p>
+                </div>
+              )
+            })}
           </div>
         )}
       </section>

@@ -28,9 +28,9 @@ export default {
       },
       keyframes: {
         floatUp: {
-          '0%': { transform: 'translateY(0) scale(1)', opacity: '0' },
-          '10%': { opacity: '0.6' },
-          '100%': { transform: 'translateY(-120vh) scale(1.4)', opacity: '0' },
+          '0%': { transform: 'translateY(200px) scale(1)', opacity: '0' },
+          '10%': { opacity: '0.4' },
+          '100%': { transform: 'translateY(-130vh) scale(1.5)', opacity: '0' },
         },
         pulseGlow: {
           '0%, 100%': { transform: 'scale(1)', opacity: '1' },

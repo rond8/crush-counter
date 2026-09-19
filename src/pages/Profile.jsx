@@ -2,25 +2,33 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getReceivedCount, getMatches } from '../lib/crush'
+import { getMyReceivedGifts } from '../lib/gifts'
+import { getFameTier, getNextTier } from '../lib/fame'
+import { handleImageError } from '../lib/utils'
 import VerifiedBadge from '../components/VerifiedBadge'
 
 export default function Profile() {
   const { profile } = useAuth()
-  const hasPremium = Boolean(profile?.premium_unlocked) || (profile?.fame ?? 0) >= 500
+  const fame = profile?.fame ?? 0
+  const tier = getFameTier(fame)
+  const nextTier = getNextTier(fame)
+
   const isVerified = Boolean(profile?.is_verified)
 
   const [receivedCount, setReceivedCount] = useState(null)
   const [matchCount, setMatchCount] = useState(null)
+  const [gifts, setGifts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([getReceivedCount(), getMatches()])
-      .then(([count, matches]) => {
+    Promise.all([getReceivedCount(), getMatches(), getMyReceivedGifts()])
+      .then(([count, matches, giftList]) => {
         if (cancelled) return
         setReceivedCount(count)
         setMatchCount(matches.length)
+        setGifts(giftList)
       })
       .catch((err) => !cancelled && setError(err.message || 'Could not load your stats.'))
       .finally(() => !cancelled && setLoading(false))
@@ -42,34 +50,86 @@ export default function Profile() {
   const hasSocials = Boolean(instagram || twitter || facebook || tiktok)
   const hasAdmirers = (receivedCount ?? 0) > 0
 
+  const handleCopyUsername = () => {
+    if (profile?.username) {
+      navigator.clipboard.writeText(profile.username)
+      alert(`@${profile.username} copied to clipboard!`)
+    }
+  }
+
+  const handleShareProfile = async () => {
+    const profileUrl = `${window.location.origin}/u/${profile?.username}`
+    const shareData = {
+      title: `Find me on Crush Counter!`,
+      text: `Send me a secret heart on Crush Counter. Who knows, we might be a match!`,
+      url: profileUrl,
+    }
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData)
+      } catch (err) {
+        console.error('Share failed:', err)
+      }
+    } else {
+      navigator.clipboard.writeText(profileUrl)
+      alert('Profile link copied to clipboard!')
+    }
+  }
+
   return (
     <div className="max-w-2xl mx-auto px-6 py-10 space-y-8">
       {/* Profile Header */}
       <section className="text-center space-y-4">
-        {profile?.avatar_url ? (
-          <img
-            src={profile.avatar_url}
-            alt="Your avatar"
-            className="w-24 h-24 rounded-full object-cover mx-auto ring-2 ring-midnight-border shadow-md"
-          />
-        ) : (
-          <div className="w-24 h-24 rounded-full bg-heart-purple/20 ring-2 ring-heart-purple/40 mx-auto flex items-center justify-center text-3xl font-display text-heart-purple shadow-md">
-            {profile?.username?.[0]?.toUpperCase() ?? '?'}
-          </div>
-        )}
+        <div className="relative w-24 h-24 mx-auto">
+          {profile?.avatar_url ? (
+            <>
+              <img
+                src={profile.avatar_url}
+                alt="Your avatar"
+                className="w-24 h-24 rounded-full object-cover mx-auto ring-2 ring-midnight-border shadow-md"
+                onError={handleImageError}
+              />
+              <div className="avatar-fallback hidden w-24 h-24 rounded-full bg-heart-purple/20 ring-2 ring-heart-purple/40 mx-auto items-center justify-center text-3xl font-display text-heart-purple shadow-md">
+                {profile?.username?.[0]?.toUpperCase() ?? '?'}
+              </div>
+            </>
+          ) : (
+            <div className="w-24 h-24 rounded-full bg-heart-purple/20 ring-2 ring-heart-purple/40 mx-auto flex items-center justify-center text-3xl font-display text-heart-purple shadow-md">
+              {profile?.username?.[0]?.toUpperCase() ?? '?'}
+            </div>
+          )}
+        </div>
 
         <div className="space-y-1">
+          <div className="flex flex-col items-center gap-1 mb-2">
+            <span
+              className="text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-full border shadow-sm"
+              style={{ backgroundColor: `${tier.color}15`, color: tier.color, borderColor: `${tier.color}30` }}
+            >
+              {tier.emoji} {tier.label} Tier
+            </span>
+            {nextTier && (
+              <p className="text-[9px] text-muted font-bold">
+                {nextTier.min - fame} more fame to reach <span style={{ color: nextTier.color }}>{nextTier.label}</span>
+              </p>
+            )}
+          </div>
+
           <div className="flex items-center justify-center gap-1.5 flex-wrap">
             <h1 className="font-display text-3xl font-bold tracking-tight">
               @{profile?.username}
             </h1>
-            {hasPremium && (
-              <span className="text-heart-yellow flex items-center" title="Premium Active">
-                <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24">
-                  <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z" />
-                </svg>
-              </span>
-            )}
+            <button
+              onClick={handleCopyUsername}
+              className="p-1.5 rounded-lg bg-midnight-surface border border-midnight-border text-muted hover:text-ink transition-colors"
+              title="Copy username"
+            >
+              <svg className="w-3.5 h-3.5 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+              </svg>
+            </button>
             <VerifiedBadge verified={isVerified} />
           </div>
           {metaLine && <p className="text-muted text-sm">{metaLine}</p>}
@@ -142,6 +202,16 @@ export default function Profile() {
 
         {/* Action Buttons & Verification Indicator */}
         <div className="flex flex-wrap justify-center items-center gap-2.5 pt-2">
+          <button
+            onClick={handleShareProfile}
+            className="btn-ghost inline-flex items-center gap-2 !px-4 !py-2 text-xs font-semibold"
+          >
+            <svg className="w-4 h-4 text-muted fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+              <path d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+            </svg>
+            Share profile
+          </button>
+
           <Link to="/profile/edit" className="btn-ghost inline-flex items-center gap-2 !px-4 !py-2 text-xs font-semibold">
             <svg className="w-4 h-4 text-muted fill-none stroke-current stroke-2" viewBox="0 0 24 24">
               <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
@@ -151,28 +221,14 @@ export default function Profile() {
           </Link>
 
           {/* Verification Status Button */}
-          {isVerified ? (
-            <div className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/30">
-              <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
-              </svg>
-              Verified
-            </div>
-          ) : (
+          {isVerified && (
             <Link to="/verify" className="btn-ghost inline-flex items-center gap-2 !px-4 !py-2 text-xs font-semibold border-sky-500/40 text-sky-400 hover:bg-sky-500/10">
               <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
                 <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z" />
               </svg>
-              Get Verified
+              Verified
             </Link>
           )}
-
-          <Link to="/premium" className="btn-ghost inline-flex items-center gap-2 !px-4 !py-2 text-xs font-semibold">
-            <svg className="w-4 h-4 text-heart-yellow fill-current" viewBox="0 0 24 24">
-              <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z" />
-            </svg>
-            Premium
-          </Link>
 
           <Link to="/settings" className="btn-ghost inline-flex items-center gap-2 !px-4 !py-2 text-xs font-semibold">
             <svg className="w-4 h-4 text-muted stroke-current stroke-2 fill-none" viewBox="0 0 24 24">
@@ -184,35 +240,20 @@ export default function Profile() {
         </div>
 
         {/* Perks Grid */}
-        {(isVerified || hasPremium) && (
-          <div className="grid gap-3 mt-6 sm:grid-cols-2 text-left">
-            {isVerified && (
-              <div className="card p-4 border-sky-500/20 bg-sky-500/5">
-                <h2 className="text-sm font-semibold text-sky-400 flex items-center gap-1.5">
-                  <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
-                  </svg>
-                  Verified Perks
-                </h2>
-                <p className="text-xs text-muted mt-2 leading-relaxed">
-                  Your account is verified, so your profile looks premium in search and your spin experience
-                  gets a special verified glow.
-                </p>
-              </div>
-            )}
-            {hasPremium && (
-              <div className="card p-4 border-heart-yellow/20 bg-heart-yellow/5">
-                <h2 className="text-sm font-semibold text-heart-yellow flex items-center gap-1.5">
-                  <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                    <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z" />
-                  </svg>
-                  Premium Perks
-                </h2>
-                <p className="text-xs text-muted mt-2 leading-relaxed">
-                  Premium unlocks ad-free app flow, exclusive spin styling, and a crown badge shown across the app.
-                </p>
-              </div>
-            )}
+        {isVerified && (
+          <div className="grid gap-3 mt-6 text-left">
+            <div className="card p-4 border-sky-500/20 bg-sky-500/5">
+              <h2 className="text-sm font-semibold text-sky-400 flex items-center gap-1.5">
+                <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+                </svg>
+                Verified Perks
+              </h2>
+              <p className="text-xs text-muted mt-2 leading-relaxed">
+                Your account is verified, so your profile looks premium in search and your spin experience
+                gets a special verified glow.
+              </p>
+            </div>
           </div>
         )}
       </section>
@@ -253,6 +294,27 @@ export default function Profile() {
           <p className="text-xs sm:text-sm text-muted mt-2 font-medium">fame</p>
         </div>
       </section>
+
+      {/* Received Gifts Section */}
+      {gifts.length > 0 && (
+        <section className="space-y-4">
+          <div className="flex items-center justify-between px-1">
+             <h2 className="text-xs font-bold uppercase tracking-widest text-muted">Gifts Received</h2>
+             <span className="text-[10px] font-bold text-heart-purple">{gifts.length} total</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+             {gifts.map(g => (
+               <div key={g.id} className="card p-3 flex flex-col items-center gap-1.5 border-heart-purple/10 bg-heart-purple/5">
+                  <span className="text-2xl">
+                    {g.gift_type === 'rose' ? '🌹' : g.gift_type === 'chocolate' ? '🍫' : '👑'}
+                  </span>
+                  <p className="text-[10px] font-bold text-ink truncate w-full text-center">From @{g.from_username}</p>
+                  <p className="text-[8px] text-muted">{new Date(g.created_at).toLocaleDateString()}</p>
+               </div>
+             ))}
+          </div>
+        </section>
+      )}
 
       <p className="text-center text-xs text-muted leading-relaxed">
         This count includes everyone who currently has you as their crush. It updates as

@@ -10,7 +10,7 @@ const ASSET_BASE = 'https://ifhtaieggnvoaeuecuxd.supabase.co/storage/v1/object/p
  * bucket in Supabase Storage rather than a local /public folder.
  */
 export function getPetImage(species, state = 'normal') {
-  const suffix = state === 'normal' ? '' : state
+  const suffix = state === 'normal' ? '' : `_${state}`
   return `${ASSET_BASE}/pets/${species}${suffix}.png`
 }
 

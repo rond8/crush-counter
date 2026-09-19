@@ -1,146 +1,78 @@
 import { Capacitor } from '@capacitor/core'
-import { Purchases, LOG_LEVEL } from '@revenuecat/purchases-capacitor'
 import { supabase } from '../supabaseClient'
 
-// RevenueCat dashboard -> Project settings -> API keys. These are
-// PUBLIC keys (safe to ship inside the app) — completely separate
-// from your Play Console / App Store Connect credentials, which
-// never go in client code. Get one per store you support.
-//
-// NOTE: the exact method names/shapes below (configure, logIn,
-// getOfferings, purchasePackage, restorePurchases, entitlements
-// object) match @revenuecat/purchases-capacitor as of writing —
-// always double check against the current docs at
-// https://www.revenuecat.com/docs/getting-started/installation/capacitor
-// since SDK APIs do evolve between major versions.
-const REVENUECAT_ANDROID_KEY = 'YOUR_REVENUECAT_ANDROID_PUBLIC_KEY'
-const REVENUECAT_IOS_KEY = 'YOUR_REVENUECAT_IOS_PUBLIC_KEY'
-
-// Must match the Entitlement identifier you create in the RevenueCat
-// dashboard (Entitlements tab), which you attach to the premium
-// product(s) you create in Play Console / App Store Connect.
-const PREMIUM_ENTITLEMENT_ID = 'premium'
-
-let configured = false
-
 /**
- * Configure the RevenueCat SDK for the current logged-in user. Call
- * this once a Supabase session exists (see AuthContext). Safe to
- * call multiple times — subsequent calls just log in the (possibly
- * different) user. No-op on web, since IAP is native-only.
+ * Initialize direct Google Play Billing.
+ * Registers products for premium subscription and one-time coin purchases.
  */
 export async function initPurchases(userId) {
-  if (!Capacitor.isNativePlatform() || !userId) return
-  try {
-    const apiKey = Capacitor.getPlatform() === 'ios' ? REVENUECAT_IOS_KEY : REVENUECAT_ANDROID_KEY
-    if (!configured) {
-      await Purchases.setLogLevel({ level: LOG_LEVEL.WARN })
-      await Purchases.configure({ apiKey, appUserID: userId })
-      configured = true
-    } else {
-      await Purchases.logIn({ appUserID: userId })
-    }
-  } catch {
-    // Purchases are a nice-to-have on top of the app — never let a
-    // failure here block anything else from loading.
+  if (!Capacitor.isNativePlatform() || !window.store) return
+
+  const { store, ProductType, Platform } = window.store
+
+  // 1. Configure the store
+  store.verbosity = store.DEBUG
+
+  // 2. Register Products
+  // 100 Coins (One-time / Consumable)
+  store.register({
+    id: '100coin',
+    type: ProductType.CONSUMABLE,
+    platform: Platform.GOOGLE_PLAY,
+  })
+
+  // 3. Handle successful purchases
+
+  // 100 Coins Handler (Image shows 100coin ID gives 50 coins)
+  store.when('100coin')
+    .approved((transaction) => {
+      console.log('50 Coins Purchase approved:', transaction)
+      // Grant 50 coins via Supabase RPC (matches Product Name in Play Console)
+      supabase.rpc('grant_coins', { p_amount: 50 }).then(({ error }) => {
+        if (!error) {
+          transaction.finish()
+        }
+      })
+    })
+    .verified((receipt) => {
+      receipt.finish()
+    })
+
+  // 4. Start the store
+  store.initialize([Platform.GOOGLE_PLAY])
+  store.update()
+}
+
+/**
+ * Trigger the Google Play purchase flow for Coins.
+ */
+export async function purchaseCoins(productId = '100coin') {
+  return orderProduct(productId)
+}
+
+/**
+ * Internal helper to order a registered product.
+ */
+async function orderProduct(productId) {
+  if (!Capacitor.isNativePlatform() || !window.store) {
+    // Fallback logic if needed (e.g. testing on web)
+    return false
+  }
+
+  const { store } = window.store
+  const product = store.get(productId)
+
+  if (product && product.canPurchase) {
+    store.order(productId)
+    return true
+  } else {
+    throw new Error(`Product ${productId} currently unavailable in Google Play`)
   }
 }
 
-/**
- * The premium package to show on the Premium page (price, product
- * identifier, etc.), or null if unavailable (e.g. web preview, no
- * network, or nothing configured yet in the RevenueCat dashboard).
- */
-export async function getPremiumPackage() {
-  if (!Capacitor.isNativePlatform()) return null
-  try {
-    const offerings = await Purchases.getOfferings()
-    const current = offerings.current
-    if (!current) return null
-    // Prefer a lifetime/non-consumable package if present, otherwise
-    // fall back to whatever's first — adjust this to match however
-    // you set up your Offering in the RevenueCat dashboard.
-    return (
-      current.availablePackages.find((p) => p.packageType === 'LIFETIME') ??
-      current.availablePackages[0] ??
-      null
-    )
-  } catch {
-    return null
-  }
-}
-
-/**
- * Buy the given package. Returns true if the purchase went through
- * and the premium entitlement is now active. Throws on a real error
- * (payment declined, network, etc) — the thrown error has
- * `userCancelled: true` if the person just closed the purchase sheet,
- * which callers should treat as a non-error.
- */
-export async function purchasePremium(pkg) {
-  const { customerInfo } = await Purchases.purchasePackage({ aPackage: pkg })
-  return isPremiumEntitled(customerInfo)
-}
-
-/**
- * Restore previous purchases on this store account (needed after a
- * reinstall or on a new device — required by both Apple's and
- * Google's review guidelines for non-consumable purchases).
- */
+// Stubs for compatibility with your existing UI
+export async function getPremiumPackage() { return null }
 export async function restorePurchases() {
-  const { customerInfo } = await Purchases.restorePurchases()
-  return isPremiumEntitled(customerInfo)
-}
-
-function isPremiumEntitled(customerInfo) {
-  return Boolean(customerInfo?.entitlements?.active?.[PREMIUM_ENTITLEMENT_ID])
-}
-
-/**
- * Sync a confirmed entitlement to Supabase so the rest of the app
- * (which reads profiles.premium_unlocked) doesn't need to talk to
- * RevenueCat directly.
- *
- * This trusts the client's report that the purchase succeeded. For
- * stronger protection against a tampered client, the more robust
- * setup is a RevenueCat webhook (Project Settings -> Integrations ->
- * Webhooks) that POSTs purchase events to a Supabase Edge Function,
- * which then updates profiles.premium_unlocked using the service
- * role key — that way the source of truth is RevenueCat's own
- * server-validated event, not something the app itself asserts.
- */
-export async function syncPremiumToProfile() {
-  const { error } = await supabase.rpc('mark_premium_purchased')
-  if (error) throw error
-}
-
-/**
- * Find a specific package by its underlying store product identifier
- * within the current Offering — used by the Shop to buy one specific
- * item, as opposed to getPremiumPackage()'s "pick the lifetime one."
- * Returns null if that product isn't configured/available.
- */
-export async function getShopPackage(productIdentifier) {
-  if (!Capacitor.isNativePlatform() || !productIdentifier) return null
-  try {
-    const offerings = await Purchases.getOfferings()
-    const current = offerings.current
-    if (!current) return null
-    return current.availablePackages.find((p) => p.product.identifier === productIdentifier) ?? null
-  } catch {
-    return null
-  }
-}
-
-/**
- * Buy a consumable (repeatable) item. Unlike purchasePremium(), this
- * doesn't check an entitlement afterward — consumables in RevenueCat
- * aren't entitlement-gated, a successful purchasePackage() call IS
- * the confirmation. Throws on failure; the error has
- * `userCancelled: true` if the person just closed the purchase sheet.
- * Caller is responsible for granting the item server-side afterward
- * (see grantPurchasedItem in lib/shop.js).
- */
-export async function purchaseConsumable(pkg) {
-  await Purchases.purchasePackage({ aPackage: pkg })
+  if (window.store) window.store.refresh()
+  return false
 }

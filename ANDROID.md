@@ -102,7 +102,7 @@ Google Play requires each upload to have a higher `versionCode` than the last. B
 in `android/app/build.gradle`:
 
 ```groovy
-versionCode 2        // increment every release
+versionCode 3        // increment every release
 versionName "1.1"     // human-readable, shown to users
 ```
 

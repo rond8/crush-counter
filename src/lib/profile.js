@@ -1,8 +1,11 @@
 import { supabase } from '../supabaseClient'
+import { normalizeImageUrl } from './utils'
+
+const USERNAME_RE = /^[a-z0-9_]{3,20}$/
 
 /**
  * Purchase permanent premium access with coins (one-time). Reaching
- * 500 fame unlocks it for free too — this is only needed otherwise.
+ * 5000 fame unlocks it for free too — this is only needed otherwise.
  */
 export async function unlockPremium() {
   const { data, error } = await supabase.rpc('unlock_premium')
@@ -18,11 +21,34 @@ export async function unlockPremium() {
 export async function getProfileByUsername(username) {
   const { data, error } = await supabase
     .from('profiles')
-    .select('username, display_name, avatar_url, gender, relationship_status, age, location, bio, last_seen, fame, premium_unlocked, is_verified')
+    .select('id, username, display_name, avatar_url, gender, relationship_status, age, birthday, location, bio, last_seen, fame, premium_unlocked, hobbies, likes, favorite_artist')
     .eq('username', username.trim().toLowerCase())
     .maybeSingle()
   if (error) throw error
   return data
+}
+
+/**
+ * Change the caller's username. Validates format client-side (same
+ * rule as registration), then relies on the DB's unique constraint
+ * for the final say on availability. Crush/admirer/message references
+ * to the old username are kept intact automatically by a DB trigger
+ * (sync_username_change) — nothing else needs to change on rename.
+ */
+export async function updateUsername(userId, newUsername) {
+  const clean = newUsername.trim().toLowerCase()
+  if (!USERNAME_RE.test(clean)) {
+    throw new Error('Username must be 3-20 characters: lowercase letters, numbers, underscores.')
+  }
+
+  const { error } = await supabase.from('profiles').update({ username: clean }).eq('id', userId)
+  if (error) {
+    if (error.code === '23505') {
+      throw new Error('That username is already taken.')
+    }
+    throw error
+  }
+  return clean
 }
 
 /**
@@ -72,7 +98,7 @@ export async function uploadAvatar(userId, file) {
   if (uploadError) throw uploadError
 
   const { data } = supabase.storage.from('avatars').getPublicUrl(path)
-  return data.publicUrl
+  return normalizeImageUrl(data.publicUrl)
 }
 
 /**
